@@ -54,12 +54,47 @@ shared/              code shared by the server and the browser
   api.ts             the API contract: request and response types
   client.ts          the typed fetch client
 src/                 the browser app
+  main.ts            the page: projects, editable inputs and stored work
+  local/             the anonymous identity and browser-local projects
+    types.ts         the stored-work shapes
+    workspace.ts     the local store and its project rules
+    memory-storage.ts  a fallback when localStorage is unavailable
 tests/
-  unit/              fast tests with an in-memory database
+  unit/              fast tests with an in-memory database or storage
   integration/       tests against a real server socket and a real file database
 scripts/dev.mjs      starts Vite and the API together
 .github/workflows/   continuous integration
 ```
+
+## Browser-local projects
+
+With no sign-in the browser makes an anonymous identity and keeps every
+project in `localStorage`. No email address or password is involved. The
+identity has its own monthly counters for rounds, revisions and checks, and
+each project keeps the usage spent on it as well.
+
+`src/local/workspace.ts` stores:
+
+- one key for the anonymous identity
+- one key for the order the projects are shown in
+- one key for the project currently on screen
+- one key for each project, holding that project's description, style,
+  candidates, suggested endings, domain results, ticked checks, rejected
+  names, notes and usage
+
+A project document is self-contained and records the identity that owns it.
+Reading, changing or deleting a project therefore touches only that project's
+key, so switching projects cannot mix their names, notes or results. Deleting
+a project removes its key and its entry in the list. A damaged project is
+skipped rather than being allowed to break the others.
+
+Projects are shown in creation order. A new project is named `Untitled
+project`, then `Untitled project 2`, and so on, until the person renames it.
+A project name is trimmed and may not be empty.
+
+If the browser refuses `localStorage`, the page still runs against an
+in-memory store and says plainly that the work will disappear when the tab
+closes.
 
 ## Database
 
@@ -143,8 +178,9 @@ The test runner is Node's built-in `node:test`; there is no test framework to
 install. Tests run against the TypeScript source directly, using Node's type
 stripping.
 
-- Unit tests use an in-memory database and cover migrations, constraints,
-  stored work and the schema privacy rules.
+- Unit tests use an in-memory database or in-memory storage and cover
+  migrations, constraints, stored work, the schema privacy rules and the
+  browser-local projects.
 - Integration tests start a real server on a random port with a real SQLite
   file, then call it with the shared typed client and with raw `fetch` for the
   error cases.
