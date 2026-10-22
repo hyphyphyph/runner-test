@@ -49,6 +49,7 @@ server/              the API process
   db.ts              opening the database and applying migrations
   migrations/        numbered SQL migrations, applied in order
   settings.ts        operator limit settings, defaults and change record
+  allowance.ts       counters, monthly refresh, atomic spend and reservations
   version.ts         version read from package.json
 shared/              code shared by the server and the browser
   api.ts             the API contract: request and response types
@@ -147,6 +148,44 @@ to the next action and never rewrites work already spent. If a stored value is
 missing or damaged, the last valid value stays in use and then the shipped
 default, so a bad setting never blocks a person.
 
+### Allowance counters
+
+`server/allowance.ts` owns the rounds, revisions and checks counters for a
+device, an account or a Studio organization. `shared/allowance.ts` holds the
+arithmetic both the server and the browser use, so the two cannot disagree
+about a month or a cost.
+
+- A counter row is kept for one period. The period begins on the day of the
+  first visit, clamped to the last day of a shorter month, and is named
+  `YYYY-MM` after the month it began in. A new period is a new row; an old
+  month is never rewritten.
+- A device row is made on its first counted action, which fixes its refresh
+  day. An account reads the anchor day from its account row. An active plan
+  uses the plan's counters; a device and a free account use the free counters.
+- `spend` checks every counter in the cost and takes the whole cost in one
+  `begin immediate` transaction. A short counter refuses the whole action and
+  takes nothing, including when two callers run at the same moment on separate
+  connections or processes.
+- `reserve` takes a whole multi-pair or multi-counter cost and writes a
+  reservation row. `settle` keeps what the action answered and gives the rest
+  back. `release` gives the whole cost back for a failed or stopped action.
+  Closing a reservation twice is harmless, and a reservation survives a
+  restart.
+- The first counted action of a period records the limits in use. Raising a
+  setting can apply at once; lowering it waits for the next period, so an
+  allowance already shown for the month is not taken away mid-month.
+- `AllowanceError` carries the counter, the amount needed and the amount that
+  remains, so a gate message can say exactly what ran out.
+
+The browser keeps the same counters on its anonymous identity. A spend, a
+reserve, a settle and a release are synchronous reads and writes of one stored
+identity document, so they are one step in the page. Held costs are stored
+with the identity and survive a reload.
+
+The account and organization counters are ready for the sign-in, billing and
+organization work items. No unauthenticated API route exposes them; the
+routes that name a subject arrive with the code that authenticates it.
+
 ### Privacy rules in the schema
 
 The schema follows the specification's StoredWork anchor:
@@ -203,8 +242,9 @@ install. Tests run against the TypeScript source directly, using Node's type
 stripping.
 
 - Unit tests use an in-memory database or in-memory storage and cover
-  migrations, constraints, stored work, the schema privacy rules and the
-  browser-local projects.
+  migrations, constraints, stored work, the schema privacy rules, the
+  browser-local projects, the allowance spend and reserve rules, and races
+  across separate database connections.
 - Integration tests start a real server on a random port with a real SQLite
   file, then call it with the shared typed client and with raw `fetch` for the
   error cases.

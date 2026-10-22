@@ -360,3 +360,99 @@ describe('browser-local projects', () => {
     assert.notEqual(first.id, second.id)
   })
 })
+
+describe('browser-local free allowance', () => {
+  test('a spend checks the whole cost and takes it in one step', () => {
+    const workspace = openWorkspace(new MemoryStorage(), { now: firstVisit })
+
+    workspace.spendAllowance({ rounds: 2, checks: 3 })
+    assert.deepEqual(workspace.allowanceStatus(), {
+      rounds: 3,
+      revisions: 3,
+      checks: 33,
+      limits: { rounds: 5, revisions: 3, checks: 36 },
+    })
+
+    assert.throws(() => workspace.spendAllowance({ rounds: 4 }), refuses('allowance_exhausted'))
+    assert.equal(workspace.allowanceStatus().rounds, 3)
+  })
+
+  test('concurrent spends never take the same remainder twice', async () => {
+    const workspace = openWorkspace(new MemoryStorage(), { now: firstVisit })
+
+    const results = await Promise.all(
+      Array.from({ length: 10 }, async () => {
+        try {
+          workspace.spendAllowance({ rounds: 1 })
+          return true
+        } catch {
+          return false
+        }
+      }),
+    )
+
+    assert.equal(results.filter(Boolean).length, 5)
+    assert.equal(workspace.allowanceStatus().rounds, 0)
+    assert.equal(workspace.identity().usage.rounds, 5)
+  })
+
+  test('a multi-pair reserve covers all or nothing and returns unanswered pairs', () => {
+    const workspace = openWorkspace(new MemoryStorage(), { now: firstVisit })
+
+    const held = workspace.reserveAllowance({ checks: 10 })
+    assert.equal(held.status, 'held')
+    assert.equal(workspace.allowanceStatus().checks, 26)
+
+    assert.throws(() => workspace.reserveAllowance({ checks: 30 }), refuses('allowance_exhausted'))
+    assert.equal(workspace.allowanceStatus().checks, 26)
+
+    workspace.settleAllowance(held.id, { checks: 7 })
+    assert.equal(workspace.allowanceStatus().checks, 29)
+
+    // Closing twice does not refund twice.
+    workspace.settleAllowance(held.id, { checks: 7 })
+    assert.equal(workspace.allowanceStatus().checks, 29)
+  })
+
+  test('a failed action gets its cost back, and a held cost survives a reload', () => {
+    const storage = new MemoryStorage()
+    const clock = { now: firstVisit }
+    const workspace = openWorkspace(storage, clock)
+
+    const held = workspace.reserveAllowance({ checks: 12 }, 'project-1')
+    assert.equal(workspace.allowanceStatus().checks, 24)
+
+    const reloaded = openWorkspace(storage, clock)
+    const released = reloaded.releaseAllowance(held.id)
+    assert.equal(released.status, 'released')
+    assert.equal(reloaded.allowanceStatus().checks, 36)
+  })
+
+  test('the counters refresh on the first-visit day after a spend', () => {
+    const storage = new MemoryStorage()
+    const clock = { now: firstVisit }
+    const workspace = openWorkspace(storage, clock)
+
+    workspace.spendAllowance({ rounds: 5 })
+    workspace.spendAllowance({ checks: 12 })
+    assert.equal(workspace.allowanceStatus().rounds, 0)
+
+    clock.now = Date.parse('2026-11-23T12:00:00.000Z')
+    assert.equal(workspace.allowanceStatus().rounds, 5)
+    assert.equal(workspace.allowanceStatus().checks, 36)
+    assert.equal(workspace.identity().usage.period, '2026-11')
+  })
+
+  test('a spend or a settled reserve adds only the used amount to the project', () => {
+    const workspace = openWorkspace(new MemoryStorage(), { now: firstVisit })
+    const project = workspace.createProject({ name: 'Acme' })
+
+    workspace.spendAllowance({ rounds: 1 }, project.id)
+    assert.equal(workspace.project(project.id)?.usage.rounds, 1)
+
+    const held = workspace.reserveAllowance({ checks: 10 }, project.id)
+    assert.equal(workspace.project(project.id)?.usage.checks, 0)
+    workspace.settleAllowance(held.id, { checks: 6 })
+    assert.equal(workspace.project(project.id)?.usage.checks, 6)
+  })
+})

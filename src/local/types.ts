@@ -109,6 +109,30 @@ export interface Project {
   updatedAt: number
 }
 
+/**
+ * A cost already taken from the counters but not yet used. A shortlist check
+ * reserves every ticked pair at once; a pair that never runs gives its check
+ * back. Older stored identities have no reservations list.
+ */
+export interface AllowanceReservation {
+  id: string
+  /** The period the cost was taken from. A refresh never refunds into a new month. */
+  period: string
+  /** The whole cost taken when the action started. */
+  rounds: number
+  revisions: number
+  checks: number
+  /** The part still unspent, until the reservation is settled or released. */
+  remainingRounds: number
+  remainingRevisions: number
+  remainingChecks: number
+  status: 'held' | 'settled' | 'released'
+  /** The project this reservation belongs to, when it came from one. */
+  projectId: string | null
+  createdAt: number
+  updatedAt: number
+}
+
 /** The identity of one browser that has not signed in. */
 export interface AnonymousIdentity {
   id: string
@@ -120,6 +144,8 @@ export interface AnonymousIdentity {
   allowanceAnchorDay: number
   /** The free-use counters for the current allowance period. */
   usage: AnonymousUsage
+  /** Costs held by actions that have not finished yet. */
+  reservations?: AllowanceReservation[]
 }
 
 /** The counters kept against an anonymous identity for one period. */

@@ -68,6 +68,8 @@ function renderAllowance(identity: AnonymousIdentity): string {
     plural(remaining.revisions, 'revision', 'revisions'),
     plural(remaining.checks, 'check', 'checks'),
   ].join(' · ')
+  const refreshAt = workspace.allowanceRefreshTime()
+  const refreshLabel = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(refreshAt)
 
   return `
     <section
@@ -75,11 +77,14 @@ function renderAllowance(identity: AnonymousIdentity): string {
       id="allowance"
       data-allowance="remaining"
       data-remaining-rounds="${remaining.rounds}"
+      data-remaining-revisions="${remaining.revisions}"
+      data-remaining-checks="${remaining.checks}"
+      data-refresh-at="${refreshAt}"
       aria-label="Remaining free allowance"
     >
       <span class="allowance-label">Free allowance remaining</span>
       <strong class="allowance-value">${escapeHtml(counts)} this month</strong>
-      <span class="allowance-note">Saved in this browser · nothing to install</span>
+      <span class="allowance-note">Saved in this browser · refreshes ${escapeHtml(refreshLabel)}</span>
     </section>
   `
 }

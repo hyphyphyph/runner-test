@@ -9,6 +9,7 @@
 // open it with an in-memory storage and a fixed clock.
 
 import type {
+  AllowanceReservation,
   AnonymousIdentity,
   AnonymousUsage,
   Candidate,
@@ -29,6 +30,17 @@ import type {
   StyleChoices,
   UsageDelta,
 } from './types.ts'
+import {
+  allowancePeriod,
+  allowanceRefreshAt,
+  clampAnchorDay,
+  normalizeAllowanceCost,
+  remainingAllowance,
+  SHIPPED_FREE_ALLOWANCE,
+} from './allowance.ts'
+import type { AllowanceCost, RemainingAllowance } from './allowance.ts'
+
+export { allowancePeriod } from './allowance.ts'
 
 /** The default namespace. A future account store can use its own prefix. */
 export const ANONYMOUS_STORAGE_PREFIX = 'nametempest.anonymous.v1'
@@ -45,6 +57,8 @@ export type WorkspaceErrorCode =
   | 'endings_too_many'
   | 'status_invalid'
   | 'usage_invalid'
+  | 'allowance_exhausted'
+  | 'reservation_not_found'
   | 'storage_failed'
 
 /** A refused operation in the browser-local workspace. */
@@ -128,41 +142,6 @@ function defaultNewId(): string {
   return `anon-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`
 }
 
-function clampAnchorDay(day: number): number {
-  if (!Number.isInteger(day)) return 1
-  return Math.min(31, Math.max(1, day))
-}
-
-function lastDayOfMonth(year: number, month: number): number {
-  return new Date(Date.UTC(year, month + 1, 0)).getUTCDate()
-}
-
-function monthKey(year: number, month: number): string {
-  return `${year}-${String(month + 1).padStart(2, '0')}`
-}
-
-/**
- * The allowance period that contains `now`, given the day of the month on
- * which the person first visited. The period begins on that day each month,
- * clamped to the last day of a shorter month.
- *
- * The returned key is the year and month the period began in.
- */
-export function allowancePeriod(now: number, anchorDay: number): string {
-  const anchor = clampAnchorDay(anchorDay)
-  const date = new Date(now)
-  const year = date.getUTCFullYear()
-  const month = date.getUTCMonth()
-  const day = date.getUTCDate()
-  const thisAnchor = Math.min(anchor, lastDayOfMonth(year, month))
-
-  if (day >= thisAnchor) return monthKey(year, month)
-
-  const previousMonth = month === 0 ? 11 : month - 1
-  const previousYear = month === 0 ? year - 1 : year
-  return monthKey(previousYear, previousMonth)
-}
-
 function emptyUsage(period: string, now: number): AnonymousUsage {
   return { period, rounds: 0, revisions: 0, checks: 0, updatedAt: now }
 }
@@ -241,6 +220,24 @@ function isAnonymousUsage(value: unknown): value is AnonymousUsage {
     typeof value.rounds === 'number' &&
     typeof value.revisions === 'number' &&
     typeof value.checks === 'number' &&
+    typeof value.updatedAt === 'number'
+  )
+}
+
+function isAllowanceReservation(value: unknown): value is AllowanceReservation {
+  if (!isRecord(value)) return false
+  return (
+    typeof value.id === 'string' &&
+    typeof value.period === 'string' &&
+    typeof value.rounds === 'number' &&
+    typeof value.revisions === 'number' &&
+    typeof value.checks === 'number' &&
+    typeof value.remainingRounds === 'number' &&
+    typeof value.remainingRevisions === 'number' &&
+    typeof value.remainingChecks === 'number' &&
+    (value.status === 'held' || value.status === 'settled' || value.status === 'released') &&
+    (value.projectId === null || typeof value.projectId === 'string') &&
+    typeof value.createdAt === 'number' &&
     typeof value.updatedAt === 'number'
   )
 }
@@ -337,7 +334,9 @@ function isIdentity(value: unknown): value is AnonymousIdentity {
     Number.isInteger(value.allowanceAnchorDay) &&
     value.allowanceAnchorDay >= 1 &&
     value.allowanceAnchorDay <= 31 &&
-    isAnonymousUsage(value.usage)
+    isAnonymousUsage(value.usage) &&
+    (value.reservations === undefined ||
+      (Array.isArray(value.reservations) && value.reservations.every(isAllowanceReservation)))
   )
 }
 
@@ -405,14 +404,20 @@ export class BrowserWorkspace {
         createdAt: now,
         allowanceAnchorDay: clampAnchorDay(anchorDay),
         usage: emptyUsage(allowancePeriod(now, anchorDay), now),
+        reservations: [],
       }
       this.#writeIdentity(created)
       return clone(created)
     }
 
+    if (stored.reservations === undefined) stored.reservations = []
+
     const period = allowancePeriod(now, stored.allowanceAnchorDay)
     if (stored.usage.period !== period) {
       stored.usage = emptyUsage(period, now)
+      // A held cost belongs to the month that has ended. The new period
+      // starts whole, so the old reservation can no longer refund anything.
+      stored.reservations = []
       this.#writeIdentity(stored)
     }
 
@@ -763,7 +768,230 @@ export class BrowserWorkspace {
     return updated
   }
 
+  // ---- the free allowance ----------------------------------------------
+
+  /** The free allowance left now, after any monthly refresh. */
+  allowanceStatus(limits = SHIPPED_FREE_ALLOWANCE): RemainingAllowance {
+    return remainingAllowance(this.identity().usage, limits)
+  }
+
+  /** A short name for `allowanceStatus`. */
+  allowance(limits = SHIPPED_FREE_ALLOWANCE): RemainingAllowance {
+    return this.allowanceStatus(limits)
+  }
+
+  /** When the current counters refresh, on the first-visit day next month. */
+  allowanceRefreshTime(): number {
+    const identity = this.identity()
+    return allowanceRefreshAt(this.#now(), identity.allowanceAnchorDay)
+  }
+
+  /**
+   * Check a whole cost and take it from the counters in one synchronous step.
+   * The check and the write happen together, so a concurrent action on this
+   * browser sees either the old remainder or the new one, never both.
+   *
+   * Throws WorkspaceError('allowance_exhausted') when the whole cost does not
+   * fit. Nothing is taken from a refused action.
+   */
+  spendAllowance(cost: AllowanceCost, projectId?: string): AnonymousIdentity {
+    const amount = this.#allowanceCost(cost)
+    const identity = this.identity()
+    const now = this.#now()
+
+    this.#takeAllowance(identity, amount, now)
+    if (projectId !== undefined && this.#hasCost(amount)) {
+      this.#addProjectUsage(projectId, amount, now)
+    }
+    this.#writeIdentity(identity)
+    return clone(identity)
+  }
+
+  /**
+   * Take a whole multi-pair or multi-counter cost now and hold it. The action
+   * may settle the part it used and give the rest back; a failed action
+   * releases all of it. The reservation is persisted with the identity, so a
+   * reload never loses a cost that was taken but not yet answered.
+   */
+  reserveAllowance(cost: AllowanceCost, projectId: string | null = null): AllowanceReservation {
+    const amount = this.#allowanceCost(cost)
+    const identity = this.identity()
+    const now = this.#now()
+
+    this.#takeAllowance(identity, amount, now)
+
+    const reservation: AllowanceReservation = {
+      id: this.#newId(),
+      period: identity.usage.period,
+      rounds: amount.rounds,
+      revisions: amount.revisions,
+      checks: amount.checks,
+      remainingRounds: amount.rounds,
+      remainingRevisions: amount.revisions,
+      remainingChecks: amount.checks,
+      status: 'held',
+      projectId,
+      createdAt: now,
+      updatedAt: now,
+    }
+    identity.reservations = [...(identity.reservations ?? []), reservation]
+    this.#writeIdentity(identity)
+    return clone(reservation)
+  }
+
+  /**
+   * Close a held reservation. `used` is what the action actually spent; the
+   * rest returns to the counters. With no `used`, the whole reservation is
+   * spent, which is the case for an action that answered every pair.
+   */
+  settleAllowance(reservationId: string, used?: AllowanceCost): AllowanceReservation {
+    const reservation = this.#heldReservation(reservationId)
+    const whole: AllowanceCost = {
+      rounds: reservation.rounds,
+      revisions: reservation.revisions,
+      checks: reservation.checks,
+    }
+    return this.#closeReservation(reservationId, used ?? whole, 'settled')
+  }
+
+  /** Return a failed or stopped action's whole cost to the counters. */
+  releaseAllowance(reservationId: string): AllowanceReservation {
+    return this.#closeReservation(reservationId, {}, 'released')
+  }
+
+  /** A short name for `spendAllowance`. */
+  spend(cost: AllowanceCost, projectId?: string): AnonymousIdentity {
+    return this.spendAllowance(cost, projectId)
+  }
+
+  /** A short name for `reserveAllowance`. */
+  reserve(cost: AllowanceCost, projectId: string | null = null): AllowanceReservation {
+    return this.reserveAllowance(cost, projectId)
+  }
+
+  /** A short name for `settleAllowance`. */
+  settleReservation(reservationId: string, used?: AllowanceCost): AllowanceReservation {
+    return this.settleAllowance(reservationId, used)
+  }
+
+  /** A short name for `releaseAllowance`. */
+  releaseReservation(reservationId: string): AllowanceReservation {
+    return this.releaseAllowance(reservationId)
+  }
+
   // ---- internals --------------------------------------------------------
+
+  #allowanceCost(cost: AllowanceCost): Required<AllowanceCost> {
+    try {
+      return normalizeAllowanceCost(cost)
+    } catch (error) {
+      throw new WorkspaceError(
+        'usage_invalid',
+        error instanceof Error ? error.message : 'A usage amount must be a positive whole number or zero.',
+      )
+    }
+  }
+
+  #hasCost(cost: Required<AllowanceCost>): boolean {
+    return cost.rounds > 0 || cost.revisions > 0 || cost.checks > 0
+  }
+
+  /**
+   * The one step itself: read the remainder, refuse the whole cost when any
+   * counter is short, and add the cost only when every counter fits.
+   */
+  #takeAllowance(identity: AnonymousIdentity, cost: Required<AllowanceCost>, now: number): void {
+    const remaining = remainingAllowance(identity.usage, SHIPPED_FREE_ALLOWANCE)
+    const short: string[] = []
+    for (const counter of ['rounds', 'revisions', 'checks'] as const) {
+      if (cost[counter] > remaining[counter]) {
+        short.push(
+          `${cost[counter]} ${counter === 'checks' ? 'check' : counter === 'rounds' ? 'round' : 'revision'}${
+            cost[counter] === 1 ? '' : 's'
+          } needed and ${remaining[counter]} left`,
+        )
+      }
+    }
+    if (short.length > 0) {
+      throw new WorkspaceError(
+        'allowance_exhausted',
+        `This action is refused as a whole: ${short.join(', ')} this month.`,
+      )
+    }
+
+    identity.usage.rounds += cost.rounds
+    identity.usage.revisions += cost.revisions
+    identity.usage.checks += cost.checks
+    identity.usage.updatedAt = now
+  }
+
+  #heldReservation(reservationId: string): AllowanceReservation {
+    const reservation = (this.identity().reservations ?? []).find((entry) => entry.id === reservationId)
+    if (reservation === undefined) {
+      throw new WorkspaceError('reservation_not_found', 'That held allowance is not in this browser.')
+    }
+    return reservation
+  }
+
+  #closeReservation(
+    reservationId: string,
+    used: AllowanceCost,
+    status: 'settled' | 'released',
+  ): AllowanceReservation {
+    const identity = this.identity()
+    const reservation = (identity.reservations ?? []).find((entry) => entry.id === reservationId)
+    if (reservation === undefined) {
+      throw new WorkspaceError('reservation_not_found', 'That held allowance is not in this browser.')
+    }
+    // Closing twice is harmless: the first close already gave back the rest.
+    if (reservation.status !== 'held') return clone(reservation)
+
+    const amount = this.#allowanceCost(used)
+    for (const counter of ['rounds', 'revisions', 'checks'] as const) {
+      if (amount[counter] > reservation[counter]) {
+        throw new WorkspaceError(
+          'usage_invalid',
+          `The used ${counter} cannot be more than the ${reservation[counter]} that were reserved.`,
+        )
+      }
+    }
+
+    const now = this.#now()
+    if (reservation.period === identity.usage.period) {
+      const refund = {
+        rounds: reservation.rounds - amount.rounds,
+        revisions: reservation.revisions - amount.revisions,
+        checks: reservation.checks - amount.checks,
+      }
+      identity.usage.rounds = Math.max(0, identity.usage.rounds - refund.rounds)
+      identity.usage.revisions = Math.max(0, identity.usage.revisions - refund.revisions)
+      identity.usage.checks = Math.max(0, identity.usage.checks - refund.checks)
+      identity.usage.updatedAt = now
+    }
+
+    reservation.remainingRounds = 0
+    reservation.remainingRevisions = 0
+    reservation.remainingChecks = 0
+    reservation.status = status
+    reservation.updatedAt = now
+
+    if (reservation.projectId !== null && this.#hasCost(amount)) {
+      this.#addProjectUsage(reservation.projectId, amount, now)
+    }
+
+    this.#writeIdentity(identity)
+    return clone(reservation)
+  }
+
+  #addProjectUsage(projectId: string, cost: Required<AllowanceCost>, now: number): void {
+    this.#changeProject(projectId, (project) => {
+      project.usage.rounds += cost.rounds
+      project.usage.revisions += cost.revisions
+      project.usage.checks += cost.checks
+      project.usage.updatedAt = now
+      project.updatedAt = now
+    })
+  }
 
   #nextDefaultName(): string {
     const names = new Set(this.listProjects().map((project) => project.name))
