@@ -101,7 +101,8 @@ export class StyleListStore {
   constructor(db: Db, options: StyleListStoreOptions = {}) {
     this.#db = db
     this.#now = options.now ?? (() => new Date())
-    this.#offered = filterEndingPicks(options.offeredEndings ?? SHIPPED_OFFERED_ENDINGS, options.offeredEndings ?? SHIPPED_OFFERED_ENDINGS)
+    const offered = options.offeredEndings ?? SHIPPED_OFFERED_ENDINGS
+    this.#offered = filterEndingPicks(offered, offered)
   }
 
   /** The lists the form shows now. Endings are filtered to the offered set. */
