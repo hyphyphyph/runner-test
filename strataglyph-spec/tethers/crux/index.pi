@@ -1,5 +1,0 @@
-// Package entry for crux.
-// Consumers import the exported skills from here, directly or through
-// the skills index. Add each new skill file under skills/ and re-export
-// it from skills/index.pi so this entry reaches it.
-from ./skills export *
