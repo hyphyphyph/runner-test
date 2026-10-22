@@ -49,13 +49,16 @@ server/              the API process
   db.ts              opening the database and applying migrations
   migrations/        numbered SQL migrations, applied in order
   settings.ts        operator limit settings, defaults and change record
+  style-lists.ts     the operator's style, tone and ending pick lists
   allowance.ts       counters, monthly refresh, atomic spend and reservations
   version.ts         version read from package.json
 shared/              code shared by the server and the browser
   api.ts             the API contract: request and response types
   client.ts          the typed fetch client
+  style.ts           the style fields, shipped lists and offered-ending rules
 src/                 the browser app
   main.ts            the naming workspace: brief, generate control and candidates
+  style-form.ts      the six-field style form and the chosen-style summary
   local/             the anonymous identity, allowance and browser-local projects
     allowance.ts     the free allowance left, in one place
     types.ts         the stored-work shapes
@@ -90,6 +93,22 @@ in `src/local/allowance.ts` until the operator settings route reaches the
 browser. A later work item connects generation to the control; for now a
 valid submission saves the brief, says plainly that no round ran, and spends
 nothing. Every customer-facing string uses `NameTempest` or `nametempest.com`.
+
+### The style form
+
+The six fields are naming style, tone, length, things to include, things to
+avoid and preferred endings. Every field starts empty and may stay empty; a
+round runs on the description alone. The chosen style is saved in the project
+document and shown above the candidate list.
+
+The naming style and tone choices and the ending pick list are operator
+lists, not values typed into the form. The browser reads them from
+`GET /api/style-lists` and falls back to the shipped lists in `shared/style.ts`
+when the server cannot answer. The ending pick list is filtered to endings
+that pass `DomainCheck.offeredEndings`. Preferred endings are checkboxes: a
+tick saves a preference and never ticks a domain check. The free-text fields
+are sent to the model as data, never as instructions. A style change applies
+to the next round only and never rewrites a name already on the list.
 
 ## Browser-local projects
 
@@ -226,6 +245,26 @@ Every error is JSON:
 ```json
 { "error": { "code": "not_found", "message": "No API route matches that path." } }
 ```
+
+### `GET /api/style-lists`
+
+Returns the pick lists behind the style form:
+
+```json
+{
+  "namingStyles": [{ "id": "descriptive", "label": "Descriptive" }],
+  "tones": [{ "id": "playful", "label": "Playful" }],
+  "endings": ["com", "io", "studio"],
+  "offeredEndings": ["com", "io", "studio"]
+}
+```
+
+`endings` is the operator's ending pick list, already filtered to endings
+that pass `DomainCheck.offeredEndings`. `offeredEndings` is the wider set
+that list may draw from. The shipped lists live in `shared/style.ts`. An
+operator change is made through `StyleListStore` in `server/style-lists.ts`;
+the admin route that calls it arrives with the admin interface and its
+operator authentication.
 
 ### Typed client
 
