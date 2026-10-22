@@ -39,6 +39,11 @@ import {
   SHIPPED_FREE_ALLOWANCE,
 } from './allowance.ts'
 import type { AllowanceCost, RemainingAllowance } from './allowance.ts'
+import {
+  emptyStyleChoices,
+  normalizeEnding as normalizeStyleEnding,
+  SHIPPED_OFFERED_ENDINGS,
+} from '../../shared/style.ts'
 
 export { allowancePeriod } from './allowance.ts'
 
@@ -54,6 +59,7 @@ export type WorkspaceErrorCode =
   | 'candidate_duplicate'
   | 'note_required'
   | 'ending_invalid'
+  | 'ending_not_offered'
   | 'endings_too_many'
   | 'status_invalid'
   | 'usage_invalid'
@@ -80,6 +86,11 @@ export interface WorkspaceOptions {
   newId?: () => string
   /** The storage namespace. Defaults to ANONYMOUS_STORAGE_PREFIX. */
   prefix?: string
+  /**
+   * Endings that may be picked as a preference. Defaults to the shipped
+   * offered list; the page replaces it when the server's list arrives.
+   */
+  offeredEndings?: readonly string[]
 }
 
 export interface NewProject {
@@ -110,14 +121,7 @@ interface ActiveDocument {
   id: string | null
 }
 
-const EMPTY_STYLE: StyleChoices = {
-  namingStyle: '',
-  tone: '',
-  length: '',
-  include: '',
-  avoid: '',
-  preferredEndings: [],
-}
+const EMPTY_STYLE: StyleChoices = emptyStyleChoices()
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -165,10 +169,37 @@ function normalizeEnding(value: string): string {
   return ending
 }
 
-function normalizeEndings(values: readonly string[]): string[] {
+/** The offered set, normalized without throwing on a damaged entry. */
+function normalizeOfferedEndings(values: readonly string[]): string[] {
+  const result: string[] = []
+  for (const value of values) {
+    const ending = normalizeStyleEnding(value)
+    if (ending !== null && !result.includes(ending)) result.push(ending)
+  }
+  return result
+}
+
+/**
+ * A preference can only be picked from the offered endings. An ending that a
+ * project already holds is kept when it stops being offered, so no project
+ * loses the style it already has.
+ */
+function normalizePreferredEndings(
+  values: readonly string[],
+  current: readonly string[],
+  offered: readonly string[],
+): string[] {
+  const allowed = new Set(offered)
+  const alreadyHeld = new Set(current)
   const result: string[] = []
   for (const value of values) {
     const ending = normalizeEnding(value)
+    if (!allowed.has(ending) && !alreadyHeld.has(ending)) {
+      throw new WorkspaceError(
+        'ending_not_offered',
+        `.${ending} cannot be suggested or checked, so it cannot be a preferred ending.`,
+      )
+    }
     if (!result.includes(ending)) result.push(ending)
   }
   return result
@@ -187,7 +218,11 @@ function normalizeSuggestedEndings(values: readonly CandidateEnding[]): Candidat
   return result
 }
 
-function normalizeStylePatch(style: Partial<StyleChoices> | undefined, current: StyleChoices): StyleChoices {
+function normalizeStylePatch(
+  style: Partial<StyleChoices> | undefined,
+  current: StyleChoices,
+  offered: readonly string[],
+): StyleChoices {
   const next: StyleChoices = {
     namingStyle: style?.namingStyle ?? current.namingStyle,
     tone: style?.tone ?? current.tone,
@@ -195,7 +230,9 @@ function normalizeStylePatch(style: Partial<StyleChoices> | undefined, current: 
     include: style?.include ?? current.include,
     avoid: style?.avoid ?? current.avoid,
     preferredEndings:
-      style?.preferredEndings === undefined ? [...current.preferredEndings] : normalizeEndings(style.preferredEndings),
+      style?.preferredEndings === undefined
+        ? [...current.preferredEndings]
+        : normalizePreferredEndings(style.preferredEndings, current.preferredEndings, offered),
   }
   return next
 }
@@ -374,12 +411,23 @@ export class BrowserWorkspace {
   readonly #now: () => number
   readonly #newId: () => string
   readonly #prefix: string
+  #offeredEndings: string[]
 
   constructor(options: WorkspaceOptions) {
     this.#storage = options.storage
     this.#now = options.now ?? Date.now
     this.#newId = options.newId ?? defaultNewId
     this.#prefix = options.prefix ?? ANONYMOUS_STORAGE_PREFIX
+    this.#offeredEndings = normalizeOfferedEndings(options.offeredEndings ?? SHIPPED_OFFERED_ENDINGS)
+  }
+
+  /**
+   * Replace the endings a new preference may be picked from. The page calls
+   * this when the operator's lists arrive; a project's saved style is never
+   * rewritten.
+   */
+  setOfferedEndings(endings: readonly string[]): void {
+    this.#offeredEndings = normalizeOfferedEndings(endings)
   }
 
   /** The storage key of one project. Exposed so a test can inspect deletion. */
@@ -456,7 +504,7 @@ export class BrowserWorkspace {
       name,
       description: input.description ?? '',
       industry: input.industry ?? '',
-      style: normalizeStylePatch(input.style, { ...EMPTY_STYLE, preferredEndings: [] }),
+      style: normalizeStylePatch(input.style, { ...EMPTY_STYLE, preferredEndings: [] }, this.#offeredEndings),
       candidates: [],
       rejectedNames: [],
       notes: [],
@@ -510,7 +558,9 @@ export class BrowserWorkspace {
     return this.#changeProject(id, (project, now) => {
       if (patch.description !== undefined) project.description = patch.description
       if (patch.industry !== undefined) project.industry = patch.industry
-      if (patch.style !== undefined) project.style = normalizeStylePatch(patch.style, project.style)
+      if (patch.style !== undefined) {
+        project.style = normalizeStylePatch(patch.style, project.style, this.#offeredEndings)
+      }
       project.updatedAt = now
     })
   }

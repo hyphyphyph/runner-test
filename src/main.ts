@@ -1,9 +1,23 @@
 import './style.css'
 import { api } from '../shared/client.ts'
-import type { AnonymousIdentity, Candidate, DomainResult, Project, ProjectSummary, StyleChoices } from './local/types.ts'
+import type { AnonymousIdentity, Candidate, DomainResult, Project, ProjectSummary } from './local/types.ts'
 import { hasRoundLeft, remainingAllowance } from './local/allowance.ts'
 import { MemoryStorage } from './local/memory-storage.ts'
 import { ANONYMOUS_STORAGE_PREFIX, BrowserWorkspace, WorkspaceError } from './local/workspace.ts'
+import type { GenerationData, StyleLists } from '../shared/style.ts'
+import {
+  buildGenerationData,
+  coerceStyleLists,
+  sameStyleLists,
+  SHIPPED_STYLE_LISTS,
+} from '../shared/style.ts'
+import { escapeHtml } from './html.ts'
+import {
+  renderStyleForm,
+  renderStyleSummary,
+  stylePatchFromField,
+  togglePreferredEnding,
+} from './style-form.ts'
 
 const app = document.querySelector<HTMLDivElement>('#app')!
 
@@ -37,14 +51,9 @@ let notice: Notice | null = opened.persistent
 let serverLine = 'Server status: checking…'
 let serverState = 'checking'
 
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;')
-}
+// The operator's lists. The shipped lists show at once, so the form works
+// before the server answers and when it cannot be reached.
+let styleLists: StyleLists = SHIPPED_STYLE_LISTS
 
 function plural(count: number, one: string, many: string): string {
   return `${count} ${count === 1 ? one : many}`
@@ -116,6 +125,19 @@ function perform(action: () => void): void {
     notice = { kind: 'error', text: messageFor(error) }
   }
   render()
+}
+
+/**
+ * The round's inputs. Description, industry and every style field stay
+ * separate values in one data object. The model reads them as data; no field
+ * is ever pasted onto an instruction. See Generation.untrustedInput.
+ */
+function prepareRoundInput(project: Project): GenerationData {
+  return buildGenerationData({
+    description: project.description,
+    industry: project.industry,
+    style: project.style,
+  })
 }
 
 /** Keep the generate control in step with the allowance that remains. */
@@ -458,79 +480,6 @@ function renderChecks(project: Project): string {
   `
 }
 
-function renderStyle(project: Project): string {
-  const nameOptions = [
-    ['', 'No preference'],
-    ['descriptive', 'Descriptive'],
-    ['invented', 'Invented'],
-    ['compound', 'Compound'],
-    ['evocative', 'Evocative'],
-  ]
-  const toneOptions = [
-    ['', 'No preference'],
-    ['playful', 'Playful'],
-    ['serious', 'Serious'],
-    ['modern', 'Modern'],
-    ['classic', 'Classic'],
-  ]
-  const lengthOptions = [
-    ['', 'No preference'],
-    ['one-word', 'One word'],
-    ['two-words', 'Two words'],
-  ]
-
-  const options = (values: string[][], selected: string): string =>
-    values
-      .map(
-        ([value, label]) =>
-          `<option value="${escapeHtml(value ?? '')}"${value === selected ? ' selected' : ''}>${escapeHtml(label ?? '')}</option>`,
-      )
-      .join('')
-
-  return `
-    <section class="card">
-      <div class="section-head">
-        <div>
-          <h2>Style choices</h2>
-          <p class="muted small">A guide for the next round. Names already on the list never change.</p>
-        </div>
-      </div>
-      <div class="style-grid">
-        <label>
-          <span class="label-text">Naming style</span>
-          <select data-field="style.namingStyle">${options(nameOptions, project.style.namingStyle)}</select>
-        </label>
-        <label>
-          <span class="label-text">Tone</span>
-          <select data-field="style.tone">${options(toneOptions, project.style.tone)}</select>
-        </label>
-        <label>
-          <span class="label-text">Length</span>
-          <select data-field="style.length">${options(lengthOptions, project.style.length)}</select>
-        </label>
-        <label>
-          <span class="label-text">Things to include</span>
-          <input data-field="style.include" type="text" value="${escapeHtml(project.style.include)}" placeholder="Words or sounds" />
-        </label>
-        <label>
-          <span class="label-text">Things to avoid</span>
-          <input data-field="style.avoid" type="text" value="${escapeHtml(project.style.avoid)}" placeholder="Words or competitors" />
-        </label>
-        <label>
-          <span class="label-text">Preferred endings</span>
-          <input
-            data-field="style.preferredEndings"
-            type="text"
-            value="${escapeHtml(project.style.preferredEndings.join(', '))}"
-            placeholder="com, studio"
-          />
-          <span class="field-hint">Bare lower-case labels, separated by commas.</span>
-        </label>
-      </div>
-    </section>
-  `
-}
-
 function renderWorkspace(project: Project, identity: AnonymousIdentity): string {
   const generateAllowed = canAffordRound(identity)
   const hasWork =
@@ -617,7 +566,7 @@ function renderWorkspace(project: Project, identity: AnonymousIdentity): string 
       </form>
     </section>
 
-    ${renderStyle(project)}
+    ${renderStyleForm(project.style, styleLists)}
 
     <section class="card candidates-card" id="candidates" aria-labelledby="candidates-heading">
       <div class="section-head">
@@ -627,6 +576,7 @@ function renderWorkspace(project: Project, identity: AnonymousIdentity): string 
         </div>
         <span class="count">${project.candidates.length}</span>
       </div>
+      ${renderStyleSummary(project.style, styleLists)}
       ${renderNames(project)}
     </section>
     ${hasWork ? renderChecks(project) : ''}
@@ -699,30 +649,6 @@ function render(): void {
         </div>
       </div>
     `
-  }
-}
-
-function stylePatch(field: string, raw: string): Partial<StyleChoices> | null {
-  switch (field) {
-    case 'style.namingStyle':
-      return { namingStyle: raw }
-    case 'style.tone':
-      return { tone: raw }
-    case 'style.length':
-      return { length: raw }
-    case 'style.include':
-      return { include: raw }
-    case 'style.avoid':
-      return { avoid: raw }
-    case 'style.preferredEndings':
-      return {
-        preferredEndings: raw
-          .split(',')
-          .map((ending) => ending.trim())
-          .filter((ending) => ending.length > 0),
-      }
-    default:
-      return null
   }
 }
 
@@ -808,7 +734,25 @@ app.addEventListener('change', (event) => {
     return
   }
 
-  const style = stylePatch(field, target.value)
+  if (field === 'style.preferredEndings') {
+    if (!(target instanceof HTMLInputElement)) return
+    const ending = target.dataset.ending
+    if (ending === undefined) return
+    perform(() =>
+      workspace.updateProject(active.id, {
+        style: {
+          preferredEndings: togglePreferredEnding(
+            active.style.preferredEndings,
+            ending,
+            target.checked,
+          ),
+        },
+      }),
+    )
+    return
+  }
+
+  const style = stylePatchFromField(field, target.value)
   if (style !== null) {
     perform(() => workspace.updateProject(active.id, { style }))
   }
@@ -820,18 +764,24 @@ app.addEventListener('input', (event) => {
   const target = event.target
   if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) return
   const field = target.dataset.field
-  if (field !== 'description' && field !== 'industry') return
+  const freeTextStyle = field === 'style.include' || field === 'style.avoid'
+  if (field !== 'description' && field !== 'industry' && !freeTextStyle) return
 
   const active = workspace.activeProject()
   if (active === null) return
 
   try {
+    if (freeTextStyle) {
+      const style = stylePatchFromField(field, target.value)
+      if (style !== null) workspace.updateProject(active.id, { style })
+      return
+    }
     if (field === 'description') {
       workspace.updateProject(active.id, { description: target.value })
+      syncGenerateButton()
     } else {
       workspace.updateProject(active.id, { industry: target.value })
     }
-    syncGenerateButton()
   } catch (error) {
     notice = { kind: 'error', text: messageFor(error) }
     render()
@@ -858,8 +808,10 @@ app.addEventListener('submit', (event) => {
   const data = new FormData(form)
   const kind = form.dataset.form
   if (kind === 'generate') {
-    const description = active.description.trim()
-    if (description.length === 0) {
+    // The style fields may all be empty. The description is the only required
+    // input, and it is the whole brief when no style is chosen.
+    const roundInput = prepareRoundInput(active)
+    if (roundInput.description.trim().length === 0) {
       notice = { kind: 'error', text: 'Write a company description before generating names.' }
       render()
       focusDescription()
@@ -897,6 +849,27 @@ window.addEventListener('storage', (event) => {
   if (event.key !== null && event.key.startsWith(ANONYMOUS_STORAGE_PREFIX)) render()
 })
 
+/**
+ * Read the operator's lists. The shipped lists are already on screen, so a
+ * server that is slow or unreachable never blocks the form. A response that
+ * does not have the expected shape is ignored and the shipped lists stay.
+ */
+function refreshStyleLists(): void {
+  api
+    .styleLists()
+    .then((response) => {
+      const lists = coerceStyleLists(response)
+      if (lists === null) return
+      workspace.setOfferedEndings(lists.offeredEndings)
+      if (sameStyleLists(lists, styleLists)) return
+      styleLists = lists
+      render()
+    })
+    .catch(() => {
+      // The shipped lists stay, so the form still works without a server.
+    })
+}
+
 function refreshServerStatus(): void {
   api
     .health()
@@ -918,4 +891,5 @@ function refreshServerStatus(): void {
 }
 
 render()
+refreshStyleLists()
 refreshServerStatus()

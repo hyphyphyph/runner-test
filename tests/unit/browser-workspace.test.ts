@@ -297,6 +297,83 @@ describe('browser-local projects', () => {
     assert.deepEqual(updated?.style.preferredEndings, ['com', 'studio'])
   })
 
+  test('a new project starts with every style field empty', () => {
+    const workspace = openWorkspace(new MemoryStorage(), { now: firstVisit })
+    const project = workspace.createProject({ name: 'Acme' })
+
+    assert.deepEqual(project.style, {
+      namingStyle: '',
+      tone: '',
+      length: '',
+      include: '',
+      avoid: '',
+      preferredEndings: [],
+    })
+  })
+
+  test('a style change never rewrites a name or ticks a domain check', () => {
+    const workspace = openWorkspace(new MemoryStorage(), { now: firstVisit })
+    const project = workspace.createProject({ name: 'Acme' })
+    workspace.addCandidate(project.id, {
+      name: 'Quillstead',
+      reason: 'Evokes writing and a settled place.',
+      styleTag: 'warm',
+      suggestedEndings: [{ ending: 'io', reason: 'Short and common with software.' }],
+    })
+
+    workspace.updateProject(project.id, {
+      style: {
+        namingStyle: 'invented',
+        tone: 'playful',
+        length: 'one-word',
+        include: 'light',
+        avoid: 'old names',
+        preferredEndings: ['com', 'studio'],
+      },
+    })
+
+    const updated = workspace.project(project.id)
+    assert.ok(updated !== null)
+    assert.deepEqual(updated.style.preferredEndings, ['com', 'studio'])
+    // A preference guides the next round. It never ticks or checks a pair.
+    assert.deepEqual(updated.pendingChecks, [])
+    assert.deepEqual(updated.domainResults, [])
+    assert.equal(updated.candidates.length, 1)
+    assert.equal(updated.candidates[0]?.name, 'Quillstead')
+    assert.equal(updated.candidates[0]?.reason, 'Evokes writing and a settled place.')
+    assert.equal(updated.candidates[0]?.styleTag, 'warm')
+  })
+
+  test('a preferred ending must be offered, but a held one is kept', () => {
+    const storage = new MemoryStorage()
+    const workspace = new BrowserWorkspace({
+      storage,
+      now: () => firstVisit,
+      newId: ids(),
+      offeredEndings: ['com', 'studio'],
+    })
+
+    assert.throws(
+      () => workspace.createProject({ name: 'Acme', style: { preferredEndings: ['design'] } }),
+      refuses('ending_not_offered'),
+    )
+
+    const project = workspace.createProject({ name: 'Acme', style: { preferredEndings: ['studio'] } })
+    workspace.setOfferedEndings(['com'])
+
+    const updated = workspace.updateProject(project.id, {
+      style: { preferredEndings: ['com', 'studio'] },
+    })
+    // The held ending stays with the project even after it stops being offered.
+    assert.deepEqual(updated.style.preferredEndings, ['com', 'studio'])
+
+    assert.throws(
+      () => workspace.updateProject(project.id, { style: { preferredEndings: ['design'] } }),
+      refuses('ending_not_offered'),
+    )
+    assert.deepEqual(workspace.project(project.id)?.style.preferredEndings, ['com', 'studio'])
+  })
+
   test('candidate endings are bare, deduplicated and limited to five', () => {
     const workspace = openWorkspace(new MemoryStorage(), { now: firstVisit })
     const project = workspace.createProject({ name: 'Acme' })
