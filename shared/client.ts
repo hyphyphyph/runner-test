@@ -46,6 +46,11 @@ export class ApiClient {
     return this.request('GET /api/health', init)
   }
 
+  /** `GET /api/style-lists` — the operator's style pick lists. */
+  styleLists(init?: RequestInit): Promise<ApiResponse<'GET /api/style-lists'>> {
+    return this.request('GET /api/style-lists', init)
+  }
+
   async request<R extends ApiRoute>(route: R, init?: RequestInit): Promise<ApiResponse<R>> {
     const split = route.indexOf(' ')
     const method = route.slice(0, split)

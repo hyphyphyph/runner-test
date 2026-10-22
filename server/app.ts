@@ -6,6 +6,7 @@ import { createServer } from 'node:http'
 import type { IncomingMessage, Server, ServerResponse } from 'node:http'
 import type { Db } from './db.ts'
 import { countMigrations } from './db.ts'
+import { StyleListStore } from './style-lists.ts'
 import type { ApiErrorResponse, HealthResponse } from '../shared/api.ts'
 
 export interface AppOptions {
@@ -83,6 +84,22 @@ export function createApp(options: AppOptions): Server {
 
       const report = healthBody(options, startedAt)
       sendJson(res, report.status, report.body)
+      return
+    }
+
+    if (pathname === '/api/style-lists') {
+      if (req.method !== 'GET') {
+        res.setHeader('allow', 'GET')
+        sendError(res, 405, 'method_not_allowed', 'This route accepts GET only.')
+        return
+      }
+
+      try {
+        const store = new StyleListStore(options.db, { now: options.now })
+        sendJson(res, 200, store.lists())
+      } catch {
+        sendError(res, 500, 'style_lists_unavailable', 'The style choices could not be read right now.')
+      }
       return
     }
 
