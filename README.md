@@ -48,6 +48,7 @@ server/              the API process
   app.ts             the HTTP routes
   db.ts              opening the database and applying migrations
   migrations/        numbered SQL migrations, applied in order
+  settings.ts        operator limit settings, defaults and change record
   version.ts         version read from package.json
 shared/              code shared by the server and the browser
   api.ts             the API contract: request and response types
@@ -73,6 +74,19 @@ number; an applied migration is never edited.
 
 The database file defaults to `data/nametempest.db`, which git ignores. Set
 `NT_DB` to use another file, or to `:memory:` for a throwaway database.
+
+### Operator settings
+
+`server/settings.ts` holds the fixed set of limit settings, the shipped
+defaults and the code that reads and changes them. The values live in the
+`settings` table and every change appends a row to `setting_changes` with the
+setting, the old and new value, the time and the operator.
+
+A write accepts only a positive whole number, and the batch size is refused
+below five. A value is read when a counted action starts, so a change applies
+to the next action and never rewrites work already spent. If a stored value is
+missing or damaged, the last valid value stays in use and then the shipped
+default, so a bad setting never blocks a person.
 
 ### Privacy rules in the schema
 
