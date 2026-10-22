@@ -5,11 +5,18 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "server": "node --watch server/main.ts",
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.server.json && vite build",
+    "start": "NODE_ENV=production node server/main.ts",
+    "test": "NODE_ENV=test node --test tests/",
     "preview": "vite preview"
   },
   "devDependencies": {
+    "@types/node": "^26.6.5",
     "typescript": "^7.0.2",
     "vite": "^8.3.5"
+  },
+  "engines": {
+    "node": ">=24"
   }
 }
