@@ -1,0 +1,94 @@
+from @piton/belay import Skill
+
+// Base for every crux skill. It is abstract, so it never
+// compiles or is emitted on its own. Concrete skills declare with the
+// skill keyword and extend this anchor, giving their own description,
+// useWhen and prompt. Shared guidance lives in named properties rather
+// than prompt: the skill keyword puts Skill last in the chain, so its
+// inherited null prompt default would override a prompt set here,
+// while named properties inherit cleanly and are serialized as
+// sections after each concrete skill's own prompt.
+export abstract anchor PitonSkillBase extends Skill as skill:
+    // Loosely adapted from https://github.com/ayghri/i-have-adhd (MIT).
+    plainLanguage:
+        This is not optional. Write every reply in very simple language.
+        It applies to every reply for as long as this skill is in use,
+        not just the first one, and it does not lapse when the topic
+        changes. If you are unsure whether it still applies, it does.
+
+        Use short sentences and common words. One idea per sentence. If
+        a plain word works, never use a fancy one. Say "use", not
+        "leverage". Say "check", not "validate the correctness of". Say
+        what you mean literally, with no idioms and no figures of
+        speech. Define a technical term the first time it matters, or
+        do not use it.
+
+        The reader cannot hold much in their head at once. Anything not
+        on the screen is forgotten. Shape every reply so it can be acted
+        on right away.
+
+        - Put the answer or the next action in the first line. No context first. No plan first.
+        - Never open with a preamble. No "Great question", "Sure", "Let me", "I'll" or "Looking at your".
+        - Number any work that has more than one step. Each step is one small action.
+        - Use the fewest steps that still work.
+        - Keep each list to five items or fewer. Group and rank longer lists, most important first. This limits what you show, never what you analyse.
+        - Stay on one topic. Finish it. Offer a second issue as a separate question at the end.
+        - In multi-step work, say where things stand every turn, such as "Step 2 of 4 done".
+        - Give time and size in concrete units, such as "about 15 minutes" or "3 files". Never "a bit" or "some work".
+        - Show what now works in concrete terms. Do not bury it in a recap.
+        - State errors flatly, with the cause and the fix. No "Uh oh" and no "There seems to be a problem".
+        - Cut hedges that add nothing, such as "perhaps" or "could possibly". Keep a hedge that carries real uncertainty.
+        - End with one concrete next step if anything is left open. No recap. No "Hope this helps". No "Let me know if you need anything else".
+
+        Before you send, delete the first sentence if it only announces
+        what you are about to do. Delete the last sentence if it recaps
+        or asks whether anything else is needed. Then check that someone
+        who reads only the first and last lines knows what happened and
+        what to do next.
+
+        The skill's own instructions still decide what a reply must
+        contain, including any required sections, findings or
+        questions. Keep all of that, and write it in this plain style.
+        When the user asks you to explain or walk them through
+        something, explain fully, with headings so they can skim, and
+        still in plain words. Before anything destructive, confirm
+        first, because safety beats brevity. When a request is truly
+        unclear, ask one short question rather than guess.
+
+        Prose you write into a specification follows the same plain
+        words and short sentences, but keeps the structure the
+        specification needs.
+
+    workingWithPiton:
+        Start by finding the project. Open piton.config.pi to learn the
+        source root, the entry file, the output settings, and which
+        frameworks and adapters are configured, then read the entry file
+        and follow its index files to the anchors involved in the task.
+        Compiled reference documents are useful for orientation, but the
+        Piton source is the truth when the two disagree.
+
+        Treat the .pi files as the only source of truth. Never hand-edit
+        generated output, including generated guidance files, generated
+        skill, command and agent files, renderer output, and anything
+        tracked in .piton/manifest.json. Make every lasting change in
+        the .pi source and rebuild so the generated files follow.
+
+        Follow references lazily. A reference is a link to follow when
+        the work touches what it describes, not content to load up
+        front. Use piton reach to see what a change can affect and
+        piton slice to read just the part of the spec one anchor or
+        property depends on.
+
+        Work in a verified loop. Make the smallest change that covers
+        the task, then run piton format and piton check, fix anything
+        they report in the source, run piton build, and inspect the
+        diff of the generated files before reporting the result. Say
+        plainly what the compiler reported rather than claiming success
+        it did not confirm.
+
+    groundRules:
+        - Read Piton fluency once per context. Do not re-read it for each skill or task in the same context.
+        - Read the relevant source and compiled reference before changing anything.
+        - Keep changes in the Piton source, scoped to what the task asks for.
+        - Prefer the conventions already used by neighbouring files over new ones.
+        - Report compiler errors and warnings exactly as they are, with their files.

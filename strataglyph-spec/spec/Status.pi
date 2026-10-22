@@ -1,0 +1,92 @@
+export anchor OpenQuestions:
+    limits:
+        - The values the operator sets at launch for the free allowance and for each plan
+    models:
+        - Which model sits behind each effort level at launch
+    sourcesToVerify:
+        - The public root zone list of top level domains, its address and its refresh rate
+        - The public bootstrap file that maps a registry to its registration query service
+        - The registration query service address for the .com registry, and its rate limits
+        - The terms of use of each of these sources, and whether a hosted product may query them at this volume
+        - Whether a paid lookup service is worth adding for speed, and which one
+        - How long an answer stays correct enough to serve from cache
+    seed:
+        - Which products and industries seed a new project so the first round has material
+        - Whether the admin interface holds a dictionary of word roots and language styles
+    domains:
+        - The length of the freshness window for a stored result
+    money:
+        - The price of Pro per month and per year, and the currency
+        - The Studio per-seat price, and the size of the per-seat discount
+        - Whether a year paid up front costs less than twelve months
+        - The size and price of credit packs
+        - How far a plan that has ended still covers revision rounds and domain checks, which the plan's counters normally pay for
+        - What is charged when a Studio organization drops below three seats
+        - Which countries Stripe is used to sell in, and which tax rules apply
+    accounts:
+        - Whether a third organization role, such as an admin, is needed for the first version
+        - How the choice between two copies of the same project is presented
+        - Whether the person can merge two projects instead of choosing one
+    data:
+        - Where the stored work lives, which database and which file store
+        - Whether a copy of the work is kept in more than one region
+        - How many days a backup is kept before the 30-day deletion window starts
+    delivery:
+        - The technology stack for the application
+        - Where the application is hosted and which region holds the data
+    email:
+        - The transactional email provider and the sending address
+        - How long a magic link stays valid
+        - Whether an invitation email is resent automatically, and how often
+    failures:
+        - The length of the short window in which a repeat raises an alert, and how long an alert stays open
+        - Which parts the operator can mark unavailable, and whether a person is told when a part that was marked unavailable returns
+
+// Working state for the open-question interview. Not exported, so it is not
+// compiled; it is removed when the person accepts the result.
+anchor DeepDiveState:
+    target: The open questions listed under OpenQuestions
+    budget: 3 questions in this round
+    answered:
+        - Credits never expire and stay usable after a subscription ends
+        - A long provider outage fails each round plainly, never queues it, and the level returns by itself
+        - A name that cannot form a valid .com domain is shown as not valid, with a plain reason, and spends no check
+    focus: Refinement is complete for this round
+    refinementApplied: true
+    awaiting: The choice between accepting the result and continuing
+
+export anchor SpecificationState:
+    accepted:
+        The person accepted this specification as good enough for a first
+        version. It is the current description of the product. The five
+        interview rounds that built it are finished, and nothing here is
+        waiting on a further interview.
+    settled:
+        - The product is a web application and paid service at nametempest.com
+        - The first version serves solo founders, small-business owners and agencies at the same time
+        - The first version generates names and checks .com domain availability
+        - The free allowance ships at 5 rounds of 12 names, 3 revisions and 20 checks, and the operator may change it
+        - Free use needs no account and is counted per browser, with a looser ceiling per network address
+        - Signing in attaches the work to the account, and the account's own counters apply from then on
+        - Sign-in is an email address with a password, or an email magic link
+        - There are two plans, Pro for one person and Studio for at least three seats, with Studio the higher tier because it adds organization controls, plus optional credit top-ups
+        - Bought credits never expire and stay usable after a subscription ends
+        - Stripe takes the payment and holds the card
+        - The first version includes shared projects, live editing and owner and member roles inside a Studio organization
+        - There are three effort levels, Quick, Balanced and Thorough, costing 1, 2 and 3 rounds, and the operator may change those multipliers
+        - A domain check proves a name taken from DNS and proves a name free only from a registration query
+        - A name that cannot form a valid .com domain is shown as not valid, with a plain reason, and spends no check
+        - Every limit and price is a setting in the operator's admin interface, never a number fixed in the specification
+        - Email carries only a magic link, an invitation, a receipt and an admin notice, never marketing
+        - Work is stored while the project exists, can be exported as a file, and is gone 30 days after deletion
+        - A failure gives a plain message, one retry and no charge, and a repeat reaches the operator
+        - A long provider outage fails rounds one at a time, never queues them, and the level returns by itself
+        - The first month is judged on the behaviour targets, plus three numbers the operator sets before launch
+    open:
+        - Every item under OpenQuestions
+    howToContinue:
+        The open questions are launch decisions, not gaps in behaviour. Each
+        is settled by a live check or by the operator writing a value before
+        launch. A later round of questions should start from OpenQuestions
+        and leave the requirements above untouched unless the person changes
+        a decision.

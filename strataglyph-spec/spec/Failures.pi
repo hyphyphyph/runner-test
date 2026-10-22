@@ -1,0 +1,88 @@
+from ./Admin import Admin
+from ./Availability import DomainCheck
+from ./Email import Email
+from ./Naming import EffortLevels
+
+export anchor Failures:
+    meaning:
+        Something can fail while a person works: the model that writes
+        names, the lookup that checks a domain, the payment provider, or
+        the application itself. Every failure gives the person three things
+        and nothing else: a plain message, a way to try again, and no
+        charge for what failed.
+    message:
+        The message says what failed in words a person understands, names
+        the part that failed, and says what the person can do next. It
+        never shows a model name, an error code, a stack trace or the raw
+        reply of another service. A technical detail is kept for the
+        operator and never shown on the page.
+    retry:
+        Every failed action offers one retry in the message itself. The
+        retry repeats that action only, with the same inputs, and never
+        starts a different action or spends a different amount. A person may
+        also retry by hand later, and the message stays until it is
+        dismissed or replaced by a success.
+    noCharge:
+        A round, a revision or a check that fails spends nothing from the
+        allowance and nothing from the credits. A round that produced no
+        names is never counted, as @{EffortLevels} and @{DomainCheck} say.
+    partial:
+        A partial failure never hides what worked. Names that did arrive
+        stay on the list, and a shortlist check keeps every result that
+        arrived while the names without an answer stay unknown.
+    paymentFailure:
+        A failure of the payment provider leaves the plan as it was. The
+        person keeps every name on screen and keeps working on the plan they
+        already had, and is told plainly that the payment did not go
+        through.
+    repeatAlert:
+        A failure that repeats is reported to the operator. One failure is
+        enough to record. The same part failing several times within a short
+        window, or several people failing the same part at once, raises an
+        alert under @{OperatorAlerts}.
+    offline:
+        A person who loses the connection sees that the page is out of
+        date, keeps their work, and can retry when the connection returns.
+        Nothing is shown as saved while the connection is down.
+    outage:
+        A provider that is slow or down for a long time is shown as the
+        failures above, one round at a time, and not as a new state of the
+        product. Each round that fails gives its plain message and its one
+        retry, and spends nothing. A round is never held in a queue to
+        start when the provider returns, so no person waits without a
+        message. The repeated failure raises an alert under
+        @{OperatorAlerts}, and the level works again by itself when the
+        provider answers, with no action needed to restore it. The
+        operator may also mark the affected level unavailable by hand, so a
+        person sees a plain message instead of a failing attempt.
+
+export anchor OperatorAlerts:
+    what:
+        An alert is a message to the operator that part of the product is
+        failing for real people. It is the only way the operator learns of a
+        failure without a person writing to support.
+    raises:
+        - A model failing for several rounds in a short window
+        - A lookup source failing, timing out or rate limiting for many names
+        - A payment provider failing or refusing several payments in a row
+        - A rise in the page failing to save work
+        - A single person failing the same action several times in a row
+    where:
+        The operator sees alerts in the admin interface under @{Admin},
+        newest first, with the part that failed, how many people were
+        affected, when it began and the technical detail.
+    sends:
+        An alert also leaves by email when the same part alerts twice in a
+        short window, under @{Email}. An ordinary single failure is not
+        emailed.
+    actions:
+        - Dismiss an alert once the part works again, and the alert returns if it fails again
+        - Mark a part unavailable, so a person sees a plain message instead of a failing attempt
+        - Read the technical detail of one failure for support
+    privacy:
+        An alert holds no company description, no generated name and no
+        domain result from any person's project. It holds the part that
+        failed, the time and the reason.
+    limits:
+        Alerts are never sold, never shown to another person, and never
+        replace the plain message the person gets on the page.

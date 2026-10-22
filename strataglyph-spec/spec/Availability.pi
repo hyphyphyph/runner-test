@@ -1,0 +1,111 @@
+export anchor DomainCheck:
+    question:
+        A domain check answers one question. Is the .com domain that
+        matches this name free to register, already registered, or not
+        known right now.
+    rule:
+        Only a live lookup may report available or taken. A lookup that
+        fails, times out or is rate limited reports unknown. Unknown is
+        never shown as available and never shown as taken.
+    results:
+        - unchecked, the name has not been looked up
+        - available, the lookup says the domain is free
+        - taken, the lookup says the domain is registered
+        - unknown, no answer is known right now, with the reason shown to the person
+        - not valid, the name cannot form a valid .com domain, with the reason in plain words
+    notValid:
+        A name that breaks the spelling rule in a way that no repair
+        settles, such as one that becomes empty or longer than a domain may
+        be, is shown as not valid. The message says what is wrong in words a
+        person understands, such as a name that is too long or that has
+        nothing left once its punctuation is removed. A not-valid name is
+        never shown as available, taken or unknown, and no lookup runs for
+        it, so it spends no check from the allowance. The other names in the
+        shortlist are checked as usual. A name that can be repaired by the
+        spelling rule is repaired and looked up, never shown as not valid.
+    spelling:
+        The domain is built from the name by one fixed rule. The name is
+        put in lower case, spaces and punctuation are removed, letters
+        outside basic Latin are transliterated or dropped, and .com is
+        added. The same name always gives the same domain, and the result
+        must be a valid domain name.
+    freshness:
+        Every result is shown with the time of its check. A result older
+        than the configured freshness window is marked stale and is
+        checked again before the person relies on it.
+    bulk:
+        A person can check a whole shortlist in one action. Each name
+        keeps its own outcome, and a partial failure never hides the names
+        that did get an answer.
+    service:
+        The lookup source is chosen by the operator and is not part of the
+        promise to the person. The product ships with a lookup chain that
+        needs no subscription, so a check costs nothing to run.
+    fastestPath:
+        A check stops at the first answer that settles the question. The
+        order is chosen by speed, and the cheapest and quickest step runs
+        first.
+    steps:
+        - A DNS query for the name servers of the domain. Name servers present means the domain is registered, and this step is the end of the check
+        - An RDAP query over HTTPS when the DNS query found no name servers. A not-found reply means the domain is free, and any other successful reply means it is registered
+        - A WHOIS query only when RDAP is missing or fails for that domain
+        - A paid lookup service only when the operator has configured one, or when every step above failed
+    whyTwoSteps:
+        A domain can be registered and still have no name servers. So a
+        DNS query alone may prove a name taken but never proves it free.
+        Only the structured registration query may report available.
+    confirmation:
+        One source is enough to report available, but it is never taken
+        from a stored result alone. Before available is shown, the
+        registration query runs again on the spot, and the name is shown as
+        available only when that fresh reply is a not-found reply.
+    doubt:
+        Any doubt makes the result unknown, never available. A reply that
+        is late, that is not the expected structured shape, that comes from
+        a route with no registration query, or that another source
+        contradicts is unknown, with the reason shown to the person.
+    takenIsCheaper:
+        A taken result is accepted from any step in the chain, because a
+        later step can only make a taken answer stronger. The extra care is
+        spent on the answer that costs the person something if it is wrong.
+    cacheReuse:
+        A stored available result may stand in for the first step, but
+        never for the fresh confirmation, so the extra query runs for every
+        name shown as available.
+    registrationQuery:
+        RDAP is a standard HTTP and JSON form of registration data. It is
+        preferred over WHOIS because it answers in one shape for every
+        registry, is not rate limited per client address like WHOIS, and
+        runs over ordinary HTTPS that a hosted product can pool and cache.
+        The .com registry publishes its own RDAP service, which is the
+        fastest reliable route for the one domain the product checks.
+    registries:
+        The list of top level domains comes from the public root zone list
+        published by the internet address registry, refreshed daily by the
+        product and never typed in by hand. The addresses of each
+        registry's registration service come from the public bootstrap file
+        for that protocol, not from a list maintained here. A registry that
+        is missing from the bootstrap file falls through to the next step.
+    scope:
+        The first version checks .com only. The lookup chain is written
+        against the registry list rather than against .com, so adding a
+        top level domain is a setting change and not new code.
+    cache:
+        A settled answer is stored per domain, shared by every person, and
+        served within one freshness window instead of looked up again. A
+        shortlist that maps two names to the same domain costs one lookup.
+        Names already checked are not checked again inside the window. A
+        stored available result is still confirmed afresh, as cacheReuse
+        says.
+    budget:
+        A single check gives up after a short fixed time and reports
+        unknown. A shortlist check runs its names in parallel with a cap on
+        how many lookups run at once, so one slow registry cannot slow the
+        whole list or exhaust the product's connections.
+    performance:
+        A single name check answers within a few seconds. A shortlist
+        check runs the names in parallel and shows each result as it
+        arrives, so a slow name does not hold back the rest.
+    noSideEffects:
+        A domain check never buys, reserves or watches a domain. It only
+        reads public registration data.

@@ -1,0 +1,149 @@
+from ./Product import Speed
+
+export anchor Generation:
+    input:
+        required:
+            - A description of the company in the person's own words
+        optional:
+            - An industry or category
+            - The style form, described under styleForm
+    styleForm:
+        The first version asks for style with one short form made of five
+        fields. It is the only place style is set, and every field may be
+        left empty.
+    styleFields:
+        - Naming style, one pick from a short list such as descriptive, invented, compound or evocative
+        - Tone, one pick from a short list such as playful, serious, modern or classic
+        - Length preference, one word, two words or no preference
+        - Things to include, free words or sounds
+        - Things to avoid, free words, sounds or competitor names
+    styleRules:
+        - Each pick is a fixed list rather than free text, so the same pick means the same thing in every round
+        - The operator edits the picks in each list from the admin interface, and can never make a field required
+        - A new project starts with every field empty, and generation runs on the description alone
+        - The form shows no more than five fields in the first version
+        - A free-text field is text for the model to read, never an instruction to the application
+    styleVisible:
+        The chosen style is kept with the project and shown above the
+        candidate list, so a person can see which style produced the names
+        on screen and can change it before another round.
+    styleEffect:
+        A change of style applies to the next round only. Names already in
+        the list stay as they are, and no round rewrites a name.
+    behaviour:
+        One generation round returns a batch of name candidates. Every
+        candidate carries the name, one sentence on why it fits this
+        company, and a style tag. A round never returns a name already in
+        the project's list.
+    batch:
+        The registered batch size for a round is 12 names. It is a
+        setting, and it is the size at the default level. A single free
+        round must return enough candidates for the person to judge a real
+        choice, so no setting may take the batch below five.
+    modelContract:
+        The model is asked for structured data, not free text. The
+        application rejects a reply that does not match the expected
+        shape and retries a limited number of times. After the last retry
+        the round fails, the person is told, and a round that produced
+        nothing is not counted against the allowance.
+    untrustedInput:
+        The company description and every other field come from the
+        person. They are data for the model to read, never instructions it
+        must follow. Text that tries to change the task of the model must
+        not change what the application does.
+
+export anchor Candidate:
+    fields:
+        name: The proposed company name
+        reason: One sentence on why the name fits this company
+        style: The style tag the round aimed for
+        domainStatus: One of unchecked, available, taken, unknown or not valid
+    invariants:
+        - A candidate keeps its name once it is in a project
+        - A candidate's domain status is only ever the result of a check on that name, or the finding that the name cannot form a valid domain
+        - A rejected candidate never comes back in a later round
+
+export anchor EffortLevels:
+    meaning:
+        An effort level tells the application how much work to spend on a
+        round. Each level selects a model. The person picks a level before
+        a round starts.
+    levels:
+        - Quick, for a fast and broad set of names
+        - Balanced, the default level
+        - Thorough, for fewer names with more reasoning behind each one
+    count:
+        There are exactly three levels. The set is fixed by the
+        specification. The operator can rename a level or mark it
+        unavailable, and can never add a fourth.
+    cost:
+        Each level has a multiplier. The multiplier is how many generation
+        rounds one round at that level spends. The shipped multipliers are
+        1 for Quick, 2 for Balanced and 3 for Thorough, and the operator
+        may change them in the admin interface.
+    shownBefore:
+        The cost of every level is shown before the round starts, in plain
+        words, along with what remains afterwards. A level that would cost
+        more than remains is shown as unavailable rather than refusing the
+        person after they choose.
+    batchSize:
+        A higher level returns fewer names than a lower one. The registered
+        batch size of 12 is the count at Balanced. Quick returns more,
+        Thorough fewer, because the same spend buys fewer, better-argued
+        names. No level returns fewer than five names.
+    modelChoice:
+        The model behind each level is set by the operator and can change
+        without a new version of the product. A change of model must not
+        change the level names or what a level promises.
+    failures:
+        If the chosen model is unavailable, the round fails with a plain
+        message. The application must not quietly swap to a different
+        level and spend a different amount.
+    speed:
+        The first names appear within about 10 seconds, and a full 12-name
+        round finishes within about 30 seconds at the default level. A
+        higher level may take longer. The person sees the expected time
+        before the round starts, and a round that runs long shows progress
+        and can be cancelled. The full targets are under @{Speed}.
+
+export anchor Revisions:
+    meaning:
+        A revision round takes the current list and a direction from the
+        person, then returns an updated list. A direction can be a
+        sentence, a set of candidates to build on, or a set of qualities
+        to avoid.
+    behaviours:
+        - Names the person kept stay unless the direction removes them
+        - Names the person rejected never return
+        - Every new name carries the same fields as a generated name
+        - The result shows which names are new and which are unchanged
+    cost:
+        A revision round spends one revision round from the allowance and
+        nothing from the rounds counter. Its level chooses the model and
+        changes the quality of the result, but not the amount it spends.
+        The cost is shown before the round starts.
+    failure:
+        A revision round that fails because of an error on our side does
+        not count against the allowance.
+
+export anchor Projects:
+    meaning:
+        A project holds one naming job. It keeps the company description,
+        the style choices, the candidate list, the rejected names, the
+        domain check results and the usage spent on it.
+    rules:
+        - A browser can hold several projects at once
+        - Every project has a name the person can change
+        - Switching projects never mixes their candidates
+        - Deleting a project removes its candidates and notes
+    anonymous:
+        A project made without an account lives in that browser. Signing
+        in attaches it to the account and keeps it there, so clearing
+        browser storage afterwards no longer removes it. If the same
+        project already exists on the account, the person decides which
+        copy wins.
+    sharing:
+        A project is private to its account by default. Inside a Studio
+        organization a member can mark a project as shared, which makes it
+        visible to every member of that organization and to nobody else.
+        Sharing is never possible on a personal account.
