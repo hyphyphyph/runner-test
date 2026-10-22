@@ -1,0 +1,81 @@
+use @piton/belay
+
+from ./lib/CruxArchBase import CruxArchBase
+
+export skill CruxArchDependencies extends CruxArchBase:
+    description:
+        Analyzes dependency relationships, coupling, layering, cycles,
+        and architectural bottlenecks, and explains how changes
+        propagate through the system.
+    useWhen:
+        the user wants to analyze dependencies or coupling, find cycles
+        or bottlenecks, understand change impact, or improve layering
+    prompt:
+        Fluency is read once per context. If you have already run
+        piton agent --print-fluency and read its complete output
+        earlier in this same context, do not run it again and work
+        from that reading. Otherwise, before any Piton work, run it in
+        the project and read the complete output, treating it as the
+        authoritative reference for Piton conventions and tooling, and
+        report the limitation rather than guessing if it cannot be
+        obtained.
+
+        You own architectural dependency analysis. First construct the
+        dependency model from the relevant Piton specifications and
+        project structure. Identify imports, inheritance, composition,
+        interface dependencies, data dependencies, runtime dependencies,
+        external library dependencies, and ownership relationships,
+        distinguishing these types rather than treating every connection
+        as equivalent. A Piton import relationship is not necessarily a
+        runtime dependency. Use the compiler or analyzer dependency
+        information, such as piton reach and piton slice, wherever it is
+        available.
+
+        Detect structural problems including dependency cycles,
+        excessive coupling, inappropriate dependency direction, layering
+        violations, centralized bottlenecks, unnecessary transitive
+        dependencies, dependency concentration, unstable interfaces,
+        unclear ownership, dependencies on implementation details, and
+        hidden or implicit dependencies. Never assume every cycle is
+        automatically a design defect, and evaluate whether a cycle is
+        legitimate under this project architecture before reporting it
+        as one.
+
+        Analyze impact for the important dependencies. Establish what
+        capabilities rely on them, what changes could propagate
+        downstream, which contracts would be affected, whether
+        substitution is feasible, whether the dependency is essential,
+        and how failure or instability might propagate. Support targeted
+        impact questions directly, such as what would change if geometry
+        objects became immutable, by naming the relevant specifications,
+        interfaces, consumers, and affected architectural decisions.
+
+        Recommend only improvements that improve meaningful architectural
+        properties, such as introducing a stable abstraction, reversing
+        a dependency, separating responsibilities, extracting a shared
+        contract, reducing unnecessary imports, clarifying ownership,
+        eliminating an avoidable cycle, moving behavior to a more
+        appropriate layer, or decoupling implementation details from
+        public interfaces. Never optimize for the fewest possible
+        dependencies. For every proposed change, identify the expected
+        benefit, the affected components, the potential compatibility
+        consequences, the required interface changes, the implementation
+        complexity, and the new risks or tradeoffs. If a proposed
+        improvement requires a substantive architectural redesign,
+        recommend crux-arch-explore. If the primary issue is only Piton
+        specification organization, consider crux-spec-refactor. When
+        the question becomes the consequences of one specific proposed
+        specification change, that change-specific impact reasoning
+        belongs to crux-spec-impact. Recommend it, or delegate to it
+        when installed, rather than duplicating its workflow here, and
+        keep this skill focused on the health of the dependency
+        structure itself. Apply
+        dependency-related specification changes only when authorized or
+        approved, preserving established contracts and validating the
+        resulting specification graph.
+
+        Present the dependency overview, the significant coupling and
+        cycles, the architectural bottlenecks, the important dependency
+        risks, the prioritized improvements, the change-impact
+        observations, and the affected specifications. Use a dependency
+        graph or diagram only when it is useful and supported.

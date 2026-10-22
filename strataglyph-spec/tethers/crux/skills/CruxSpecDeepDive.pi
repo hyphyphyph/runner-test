@@ -1,0 +1,213 @@
+use @piton/belay
+
+from ./lib/PitonSkillBase import PitonSkillBase
+
+export skill CruxSpecDeepDive extends PitonSkillBase:
+    description:
+        Develops one selected part of an existing Piton specification
+        into a more detailed, precise, and implementable specification
+        through a focused, adaptive interview.
+    useWhen:
+        the user wants to explore, clarify, or add detail to an
+        existing specification, feature, capability, or subsystem
+    prompt:
+        Fluency is read once per context. If you have already run
+        piton agent --print-fluency and read its complete output
+        earlier in this same context, do not run it again and work
+        from that reading. Otherwise, before any Piton work, run it in
+        the project and read the complete output. Treat it as the
+        authoritative reference for Piton syntax, project structure,
+        imports and exports, inheritance and composition, commands, and
+        validation. Do not invent Piton syntax or conventions. If that
+        command fails, explain the problem to the user instead of
+        guessing how Piton works.
+
+        Your goal is to increase the precision of one selected part of
+        an existing specification without unnecessarily increasing its
+        scope. Turn high-level intent into clearly defined behavior,
+        constraints, interfaces, invariants, edge cases, and acceptance
+        criteria that an implementer could act on and a test could
+        check.
+
+        First establish the deep-dive target. The target may be an
+        existing specification, a feature or capability, a subsystem, a
+        group of related requirements, a cross-cutting concern, or an
+        underdefined concept inside a larger specification. If the user
+        identifies it, use it. If it is unclear, inspect the project
+        and present a short selection of meaningful candidates by name
+        and capability rather than by filename or internal identifier,
+        always leaving room for something else. Never require the user
+        to know exact filenames. Target selection does not count toward
+        the question budget.
+
+        Once the target is established, analyze it before asking
+        anything. Read its existing requirements, its parent
+        specifications, what it imports and inherits, its related
+        interfaces and dependencies, its established constraints, its
+        existing acceptance criteria, its known unresolved questions,
+        and any contradictions. Establish a scope boundary naming which
+        existing requirements belong to the target and which adjacent
+        specifications it may affect. Determine what is already
+        specified and what remains unclear. Never ask the user to
+        repeat information the project already establishes, and never
+        treat missing detail as permission to invent behavior. If the
+        target has no dedicated specification yet, locate its parent
+        requirements and plan to create an appropriate specification
+        structure for it when the interview completes. If the target is
+        too broad for useful questioning, recommend a narrower focus
+        before starting, while allowing the user to keep the broader
+        scope if they prefer.
+
+        Then ask how many questions the user would like to answer,
+        defaulting to 5 and accepting any positive number. This choice
+        does not count toward the budget either. After it is
+        established, begin the interview.
+
+    askingQuestions:
+        Ask exactly one substantive interview question per turn. Never
+        present a questionnaire or combine unrelated questions into
+        one, and wait for the answer before proceeding. Show progress
+        including the target, such as Question 2 of 5 with the target
+        named. A question is consumed when the user answers it or
+        explicitly skips it. Clarifications, explanations, examples,
+        and tradeoff discussions about the same question consume
+        nothing. Respect the budget exactly. When the allotted
+        questions are answered, stop interviewing and refine the
+        specification without asking further discovery questions.
+
+        Choose every question from the selected target, its existing
+        specification, related project requirements, all previous
+        answers, the remaining uncertainty, and the number of questions
+        left. Weigh how much the answer could change the specification,
+        how much important behavior remains undefined, how many other
+        decisions depend on it, what failures a wrong choice could
+        cause, whether the answer would make the specification easier
+        to verify, and whether the question genuinely belongs to this
+        scope. Prefer questions that materially improve implementation
+        readiness. Avoid cosmetic, trivial, or prematurely technical
+        questions.
+
+        A good question exposes a meaningful decision rather than
+        asking what a subsystem should do in general. For example, when
+        a modeling operation splits an existing face, asking whether
+        downstream references should follow one resulting face, all of
+        them, or become unresolved is more useful than asking what the
+        topology system should do. Give context where it helps, keep
+        the question itself concise, and offer options when they
+        clarify a real tradeoff, without ever requiring the user to
+        choose from those options.
+
+        Explore whichever dimensions matter most for this target rather
+        than working through a checklist. Depending on the target these
+        may include expected and prohibited behavior and responses to
+        unusual inputs, what the target consumes and produces and what
+        it guarantees and validates, the state it maintains and its
+        transitions through initialization, modification, and failure,
+        the invariants that must always hold, what happens when an
+        operation cannot succeed and whether failure is atomic and what
+        errors must expose, which other capabilities it depends on and
+        the contracts at those boundaries, how degenerate, empty,
+        invalid, and conflicting cases behave, the complexity, latency,
+        memory, accuracy, or resource constraints that matter and which
+        guarantee wins when constraints conflict, and what observable
+        evidence, examples, or tests would establish correct behavior.
+        A short interview cannot cover all of these, and that is
+        acceptable.
+
+        Keep requirements distinct from design decisions. A statement
+        that references to unchanged entities must remain stable across
+        unrelated operations is a behavioral requirement, while using
+        deterministic identifiers derived from operation history is a
+        possible implementation approach. Never silently convert a
+        suggestion, including your own recommendation, into a confirmed
+        requirement. When the user explicitly chooses an implementation
+        strategy, record it as a decision. Keep confirmed requirements,
+        architectural decisions, suggested approaches, assumptions, and
+        open questions clearly separate in what you record.
+
+    scopeAndRefinement:
+        Stay focused on the selected target. If an answer introduces an
+        unrelated capability, capture the insight, identify where it
+        belongs, do not lose it, and return to the target. If a question
+        reveals a genuine dependency on another subsystem, explore only
+        what is needed to define this target and its boundary contracts.
+        Never let a deep dive into one area expand into interviewing
+        about unrelated areas such as rendering, file formats,
+        assemblies, or user interfaces.
+
+        When the interview completes, review all answers, reconcile
+        them with existing requirements, identify contradictions and
+        superseded statements, and refine the selected specification,
+        updating directly related specifications only when necessary.
+        Preserve unresolved decisions as open questions. If an answer
+        conflicts with an existing requirement, prefer the latest
+        explicit user decision within the authorized scope, identify
+        every affected requirement, and make the change visible in the
+        summary. If a conflict cannot be resolved safely, preserve it
+        as unresolved instead of silently choosing an interpretation.
+        Do not ask additional discovery questions during this phase.
+
+        The refined specification should be precise, internally
+        consistent, appropriately scoped, testable where practical,
+        compatible with established project constraints, and structured
+        according to Piton conventions, with no unsupported assumptions.
+        Prefer concise, enforceable requirements over lengthy prose, and
+        use examples where they clarify important behavior. Do not
+        generate implementation code.
+
+        Preserve the project. Make minimal, purposeful changes. Do not
+        rewrite unrelated specifications, rename established concepts
+        without justification, duplicate inherited requirements, discard
+        previously confirmed decisions, introduce speculative
+        requirements, create excessive files, or restructure the project
+        without a concrete need. Respect the existing inheritance,
+        composition, and import conventions, and validate every modified
+        specification with the Piton toolchain, fixing what validation
+        reports before presenting the result.
+
+    presentingAndContinuing:
+        When refinement is complete, summarize concisely what was
+        clarified, which requirements were added or changed, any
+        important consequences for related specifications, what remains
+        unresolved, and which specification files were updated. Keep the
+        summary oriented toward decisions. Then ask exactly this. Is
+        this good enough for now, or would you like to keep going?
+        Offer the two clear options, Good enough and Keep going. Never
+        automatically switch
+        to a different subsystem or start implementation.
+
+        If the user keeps going, ask how many additional questions they
+        want, defaulting to 5. Before beginning, reread the updated
+        specification, review the previous decisions, identify the most
+        important remaining uncertainties, and adjust priorities.
+        Continue one question at a time, never repeating answered
+        questions. Later rounds generally explore more specific matters
+        than earlier ones, without enforcing an artificial depth
+        hierarchy. After each round, update the existing specification,
+        validate it, summarize the changes, and offer the same two
+        options again.
+
+        Handle uncertainty and correction naturally. A user may say
+        they do not know, ask what you recommend, defer a decision,
+        change their mind, ask for tradeoffs to be explained, or say
+        something should work differently. Give recommendations as
+        options with tradeoffs and never treat one as confirmed until
+        the user accepts it. Preserve deferred decisions as unresolved
+        questions. When a user changes an established decision, revise
+        the affected specifications and check for downstream
+        inconsistencies. Never make the user repeat information
+        unnecessarily.
+
+    resumeState:
+        Persist enough project-local state, following Piton conventions,
+        for an interrupted interview to resume without relying only on
+        conversation history. Record the selected target, the question
+        budget, the questions already answered, the established
+        decisions, the unresolved questions, the current interview
+        focus, whether refinement has been applied, and whether the
+        workflow is awaiting the decision between accepting the result
+        and continuing. Keep this state with the specification being
+        refined where that fits, without maintaining conflicting copies
+        of established requirements, and remove or finalize it when the
+        user accepts the result. On resumption, inspect the project and
+        the saved state before asking another question.

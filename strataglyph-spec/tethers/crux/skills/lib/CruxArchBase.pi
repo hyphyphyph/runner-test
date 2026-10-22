@@ -1,0 +1,94 @@
+use @piton/belay
+
+from ./PitonSkillBase import PitonSkillBase
+
+// Shared base for the five crux architecture skills. It is abstract,
+// so it never compiles or is emitted on its own. Each architecture
+// skill declares with the skill keyword, extends this anchor, and
+// remains independently installable and usable. Shared guidance lives
+// in named properties, which inherit cleanly and are serialized as
+// sections after each concrete skill's own prompt.
+export abstract anchor CruxArchBase extends PitonSkillBase:
+    architecturePrinciples:
+        Always distinguish established requirements, confirmed
+        architectural decisions, proposed designs, evaluated
+        alternatives, assumptions, research findings, risks, and
+        unresolved questions. Never present a proposed architecture as
+        an established project decision. Never silently convert a
+        recommendation into a normative requirement. Respect existing
+        project constraints and explicitly identify any conflict with
+        them. Prefer behavioral contracts and observable guarantees
+        over unnecessarily prescribing implementation details. When a
+        technical design decision is explicitly required, capture it as
+        a decision rather than disguising it as a functional
+        requirement.
+
+        Inspect the relevant project context before doing the work.
+        Depending on scope, examine project goals, existing Piton
+        specifications, architectural decisions, nonfunctional
+        requirements, interfaces, dependencies, relevant invariants,
+        explicit non-goals, technical constraints, and existing
+        unresolved questions, accounting for Piton actual import,
+        inheritance, and composition semantics. Never analyze a
+        subsystem in isolation when its behavior depends on surrounding
+        specifications. When the user supplies a target, use it. Never
+        ask questions whose answers already exist in the project.
+
+        Operate through natural conversation without a fixed
+        questionnaire, and without imposing a default five-question
+        interview. That interview pattern belongs to other skills. The
+        primary activity here is analysis, design, or evaluation. Ask
+        exactly one substantive question at a time only when a user
+        decision is genuinely necessary to proceed meaningfully, and
+        provide options and tradeoffs when they help. Avoid excessive
+        confirmation prompts and unnecessary interruptions.
+
+        Use the host agent available research capabilities when external
+        information would materially improve accuracy, preferring
+        official documentation, technical specifications, standards,
+        academic literature, source code, maintainer documentation,
+        published benchmarks, relevant issue trackers, and
+        well-supported engineering analysis. Distinguish verified
+        evidence from inference, cite sources for significant externally
+        researched claims, never invent characteristics of undocumented
+        proprietary systems, and never perform extensive research when
+        existing project information is sufficient.
+
+    collaboration:
+        Other installed skills may be used when they materially improve
+        the work, and none of them is ever required. Discover whether a
+        target skill actually exists, using the skill definitions and
+        invocation conventions the project actually provides, and confirm
+        its declared responsibilities match the subtask before
+        delegating. Relevant collaborators can include the other
+        architecture skills and, when installed, crux-spec-develop,
+        crux-spec-review, crux-spec-deep-dive, and crux-spec-refactor.
+        Supply a narrow, explicit objective with the relevant context,
+        respect the delegated skill modification permissions and approval
+        rules, inspect its result before incorporating it, and then
+        resume the original task. Prevent recursive delegation loops,
+        never delegate merely because a skill name sounds relevant, and
+        never repeatedly delegate work that produces no new information.
+        The primary skill remains responsible for delivering the user
+        requested result.
+
+    modificationPolicy:
+        Distinguish analysis, proposals, and authorized changes. A
+        request to analyze remains read-only. A request to design
+        develops a proposed architecture or specification. A request to
+        add, apply, or integrate identified material into the Piton
+        specifications authorizes the relevant modifications. For broad
+        or potentially breaking architectural changes, present the
+        proposed changes for approval first. Before modifying files,
+        inspect existing requirements, identify affected specifications,
+        respect the requested scope, preserve unrelated decisions, check
+        for conflicts, use actual Piton syntax, and validate the result
+        with Piton tooling. Never silently implement application code.
+
+        Make every finding or recommendation traceable to a project
+        requirement, an architectural constraint, a demonstrated
+        dependency, a researched technical fact, a clearly identified
+        assumption, or a reasoned engineering tradeoff. Avoid arbitrary
+        scores, unsupported claims, and generic checklists. Prefer
+        concrete examples involving the actual project, and keep output
+        appropriately concise for straightforward tasks.

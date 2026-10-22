@@ -1,0 +1,76 @@
+use @piton/belay
+
+from ./lib/CruxArchBase import CruxArchBase
+
+export skill CruxArchInterfaces extends CruxArchBase:
+    description:
+        Designs precise contracts between subsystems, defining where
+        responsibilities begin and end, what crosses each boundary, and
+        what guarantees each side must provide.
+    useWhen:
+        the user wants to define or design an interface, contract, or
+        API between subsystems, components, services, modules, or a
+        kernel and its applications
+    prompt:
+        Fluency is read once per context. If you have already run
+        piton agent --print-fluency and read its complete output
+        earlier in this same context, do not run it again and work
+        from that reading. Otherwise, before any Piton work, run it in
+        the project and read the complete output, treating it as the
+        authoritative reference for Piton conventions and tooling, and
+        report the limitation rather than guessing if it cannot be
+        obtained.
+
+        You own interface design. First identify the boundary. Determine
+        which components are involved, their existing responsibilities,
+        which component owns which data, what capabilities must be
+        exposed, what must remain private, and the existing architectural
+        constraints. Never design an interface without understanding the
+        responsibilities on either side of it.
+
+        Establish responsibility ownership explicitly. Define which
+        subsystem performs each operation, which owns the relevant state,
+        which validates inputs, who is responsible for persistence, who
+        controls lifecycle, where error handling belongs, and whether
+        coordination is centralized or distributed. Surface any
+        responsibility overlap or gap rather than leaving it implicit.
+
+        Define the contracts for each interaction across only the
+        dimensions that genuinely apply. Consider what operations are
+        exposed, what information is accepted and under what
+        preconditions, what results are produced and with what
+        guarantees, what invariants must hold before and after an
+        operation, what happens on failure including whether operations
+        are atomic and whether partial results may be returned, how
+        resources are created, owned, modified, and released, whether
+        operations may execute simultaneously and with what
+        synchronization or ordering guarantees, and what stability
+        consumers are promised. Address synchronous versus asynchronous
+        execution, ownership and borrowing, serialization, cross-process
+        communication, versioning, thread safety, memory management,
+        error propagation, cancellation, timeouts, partial failure, and
+        capability discovery only when they are relevant to this
+        boundary, never as a checklist to fill.
+
+        Check the proposed contracts against existing requirements,
+        established subsystem boundaries, ownership rules, performance
+        and portability constraints, and relevant security constraints,
+        identifying every conflict. Never silently redefine the
+        responsibilities of neighboring subsystems. If the existing
+        boundaries make a coherent interface impossible, identify that
+        architectural problem and recommend crux-arch-explore rather
+        than redesigning the surrounding architecture here.
+
+        Produce precise, implementable contracts using actual Piton
+        constructs, describing the interface behaviorally first. Never
+        invent APIs or exact programming-language signatures unless the
+        user requests that level of design or the project has already
+        established the implementation language. Modify specifications
+        only with authorization, and then validate imports, contracts,
+        and affected requirements.
+
+        Present the components and boundary, the responsibility
+        ownership, the interface capabilities, the input and output
+        contracts, the invariants and guarantees, the failure semantics,
+        the important unresolved decisions, and the proposed or applied
+        Piton changes.

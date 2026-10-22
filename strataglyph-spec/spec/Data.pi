@@ -1,0 +1,72 @@
+from ./Access import Access
+from ./Email import Email
+
+export anchor StoredWork:
+    what:
+        The application stores the work a person made while a project
+        exists, so a person can come back to it in the same browser or on
+        any device they sign in on.
+    stored:
+        - The company description and the other inputs of each project
+        - The style choices of each project
+        - Every candidate, with its reason, style tag and domain status
+        - The names the person rejected
+        - The notes the person wrote
+        - The usage spent on each project
+        - The account, plan, credits and seats, and the counters of the allowance
+    notStored:
+        - Card numbers or any payment detail, which stay with the payment provider
+        - A password in readable form; only a one-way hash is kept
+        - The text of a message in flight inside the model prompt after the round ends
+        - A network address in readable form; only a one-way hash is kept for the month
+    anonymous:
+        Work made with no account lives in the browser. It is reachable
+        only from that browser until the person signs in, and signing in
+        attaches it to the account under @{Access}.
+    scope:
+        One project's work is readable only by the people who may see it.
+        Those people are its owner, the members of an organization it is
+        shared with, and the operator for support. No other person and no
+        other project can reach it.
+
+export anchor Export:
+    meaning:
+        A person can take their work out as a file at any time, with no
+        support request.
+    formats:
+        - A spreadsheet-ready file of the candidate list, with name, reason, style and domain status
+        - A plain text list of names, one per line
+    rules:
+        - Export covers one project or every project the person can see
+        - An export of a shared project includes who added each name
+        - Export never needs a payment, and stays available when the allowance is used up
+        - A person who has no account can export the project in the browser
+        - Copying a shortlist to the clipboard gives the same plain text list
+
+export anchor Deletion:
+    meaning:
+        A person can delete a project or an account at any time, and
+        deletion is the only thing that removes the work.
+    project:
+        Deleting a project removes its description, candidates, rejected
+        names, notes and usage record from the live system at once. It
+        disappears from every view, including the view of another member of
+        a shared project.
+    account:
+        Deleting an account removes its projects, its counters and its
+        sign-in. Any organization the person owns must be closed or handed
+        to another member first, and the person is told which.
+    grace:
+        A deleted account is kept for 30 days and then dropped. During
+        those 30 days the person can sign in and restore it in full. After
+        30 days nothing is kept and the work cannot be restored.
+    backups:
+        A copy in a backup is dropped within the same 30-day window, so no
+        deleted work outlives the grace period in any copy.
+    notice:
+        Before an account is deleted the person is told what will be
+        removed and when. A deletion is confirmed by email once it happens,
+        under @{Email}.
+    others:
+        Deleting a project never removes another member's account. Closing
+        an organization never deletes the personal accounts of its members.

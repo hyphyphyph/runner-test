@@ -1,0 +1,26 @@
+export anchor Email:
+    purpose:
+        Email carries only what the product needs in order to work. It is
+        never used to sell, to promote or to announce.
+    sends:
+        - A magic link that signs a person in
+        - An invitation to join a Studio organization
+        - A notice that a member was added to or removed from an organization
+        - A receipt or a payment failure notice for a subscription or a credit pack
+        - An admin notice that a change touched what a person paid for
+        - A notice that an account is about to be deleted, and a notice that it was deleted
+    neverSends:
+        - A newsletter, a promotion or a product announcement
+        - A reminder to come back or to finish a project
+        - A message about another person's work
+    rules:
+        - A magic link is single use, expires within a short fixed time, and only one is valid at a time
+        - A link that has been used, expired or replaced fails with a plain message and a way to ask for a fresh one
+        - Every email names the site and the reason it was sent, in the first line
+        - An email never contains a company description, a generated name or a domain result, so a mail provider holds none of the person's work
+        - A person can change which of these emails they receive, except the magic link and the receipt for a payment they made
+    delivery:
+        A transactional email provider sends these messages. The provider and
+        the sending address are open questions. A failed send is retried, and
+        a magic link that never arrived is never counted against the free
+        allowance.

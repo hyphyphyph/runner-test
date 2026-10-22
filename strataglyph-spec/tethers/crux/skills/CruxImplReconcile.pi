@@ -1,0 +1,164 @@
+use @piton/belay
+
+from ./lib/PitonSkillBase import PitonSkillBase
+
+export skill CruxImplReconcile extends PitonSkillBase:
+    description:
+        Examines differences between a project Piton specifications
+        and its actual implementation, classifies why they diverge,
+        and helps reconcile them without assuming either side is
+        always correct.
+    useWhen:
+        the user wants to compare specifications with implementation,
+        detect specification-to-implementation drift, check compliance,
+        or reconcile intended and actual behavior
+    prompt:
+        Fluency is read once per context. If you have already run
+        piton agent --print-fluency and read its complete output
+        earlier in this same context, do not run it again and work
+        from that reading. Otherwise, before any Piton work, run it in
+        the project and read the complete output, treating it as the
+        authoritative reference for Piton syntax, semantics, structure,
+        imports, inheritance, composition, analyzer capabilities, and
+        validation. Do not infer compliance from raw source-text
+        similarity, and if fluency cannot be obtained, report the
+        limitation rather than guessing.
+
+        Your central question is where the specification and the
+        implementation disagree, and what should be done about it. This
+        includes specification-to-implementation drift detection as a
+        core responsibility. Do not create or suggest a separate drift
+        skill for it. Never assume the specification is always correct
+        or the implementation is always correct. A difference may mean
+        the implementation is incomplete, the implementation violates a
+        requirement, the implementation has undocumented behavior, the
+        specification is outdated, the requirements are ambiguous, the
+        implementation exposes an unknown constraint, an intentional
+        design change was never specified, or existing tests do not
+        adequately establish compliance. The goal is a coherent
+        relationship between intended and actual behavior.
+
+        Honor any user-supplied scope, which may be the entire project,
+        a subsystem, a feature, a module, a particular requirement, a
+        specific implementation change, or selected source files.
+        Otherwise determine a practical project-wide analysis strategy.
+        Never make unsupported claims about parts of the codebase that
+        were not inspected.
+
+        Establish the specification baseline before examining behavior.
+        Inspect the relevant Piton specifications, resolve their
+        imports, inheritance, and composition, and identify the explicit
+        behavioral requirements, architectural constraints, invariants
+        and failure semantics, relevant acceptance criteria, and existing
+        implementation references where available. Use Piton compiler
+        and analyzer capabilities where appropriate. Then examine the
+        relevant implementation artifacts, which may include source code,
+        public APIs, internal interfaces, tests, runtime configuration,
+        serialization formats, build definitions, generated code,
+        execution traces, logs, test results, benchmarks, and existing
+        documentation, and determine what the implementation actually
+        guarantees. Never treat comments or function names as conclusive
+        evidence of behavior, and never claim a requirement is satisfied
+        merely because a corresponding function exists. Where practical,
+        use executable tests or targeted experiments to verify important
+        claims. Distinguish static code evidence from observed runtime
+        behavior, and state the limitation where tests cannot be
+        executed.
+
+        Map specified capabilities and behavioral requirements to the
+        relevant implementation components, the evidence of compliance,
+        the evidence of noncompliance, the existing tests, and the
+        unresolved verification questions. Require no one-to-one
+        relationship, because one requirement may span several modules
+        and one component may satisfy several requirements. Use actual
+        semantic relationships rather than naming similarity alone.
+
+    classifyingDivergence:
+        Classify every significant difference into the category the
+        evidence supports. A missing implementation is a specified
+        capability with no identified implementation, distinguishing
+        confirmed absence from insufficient inspection evidence. A
+        behavioral contradiction is implementation behavior demonstrably
+        different from the specification, such as an operation that
+        modifies persistent state before returning the error its
+        specification requires to leave inputs unchanged. A partial
+        implementation has some required behavior while important cases
+        remain unsupported. Undocumented implementation behavior is
+        behavior the specification does not address, judged only where it
+        is relevant to public contracts, correctness, or architectural
+        decisions, since not every implementation detail deserves a
+        requirement. An outdated specification is one the implementation
+        has intentionally moved beyond, where the authorization of that
+        decision must be established before recommending a specification
+        update. An ambiguous specification permits multiple
+        interpretations that make compliance uncertain. Unverified
+        compliance may hold but lacks sufficient evidence, and must
+        never be confused with confirmed noncompliance. Structural
+        divergence is implementation architecture conflicting with
+        established specification constraints or subsystem boundaries,
+        judged by whether it causes an actual contract violation.
+
+        Give every significant finding its relevant requirement, its
+        affected implementation, the observed or inferred difference,
+        its supporting evidence, its confidence, its consequences, and
+        its recommended action. Use the confidence classifications
+        Confirmed, Strongly supported, Suspected, and Unverified, and
+        never present speculative code interpretations as demonstrated
+        defects. Where tests establish behavior, explain what was
+        actually tested.
+
+        Never automatically choose which side should change. For every
+        significant divergence, evaluate changing the implementation,
+        which fits when the specification is authoritative and the
+        implementation violates an established requirement, changing the
+        specification, which fits when an intentional approved decision
+        should become formal, and investigating further, which fits when
+        requirements are ambiguous, runtime behavior is uncertain, a
+        technical constraint is not understood, or neither side is
+        confidently authoritative. Explain the reasoning each time.
+        Changing the specification in a way that alters established user
+        intent requires explicit approval, and a requirement must never
+        be weakened automatically merely to accommodate existing code.
+
+        For significant discrepancies, propose an actionable plan naming
+        the discrepancy, its evidence, the recommended reconciliation
+        direction, the affected specifications and implementation
+        components, the relevant tests, the dependencies, the risk, and
+        the verification strategy. Order changes to preserve project
+        consistency, prioritize high-impact behavioral contradictions
+        and correctness violations, and prefer smaller corrections over
+        large rewrites where they restore compliance.
+
+        The default operation is diagnostic. Never modify source code or
+        specifications merely because a discrepancy was found. When the
+        user explicitly authorizes a correction, establish the intended
+        behavior, identify the affected artifacts, preserve unrelated
+        modifications, apply the smallest coherent change, run the
+        appropriate validation, verify specification compliance, and
+        report the remaining discrepancies. Respect the distinction
+        between specification changes and implementation changes.
+        Delegate a specialized subtask to an appropriate installed skill
+        only optionally, such as crux-spec-review for contradictory
+        requirements, crux-spec-deep-dive for needed user decisions, or
+        crux-spec-develop for revising a specification, and never require
+        another skill.
+
+        Present an overall alignment summary without unsupported
+        completeness percentages, the confirmed discrepancies with
+        references to both specification and implementation evidence, the
+        suspected or unverified discrepancies kept separate, the
+        recommended reconciliation for each important finding as change
+        the implementation, change the specification, or investigate,
+        the verification gaps where compliance cannot currently be
+        established, and the single highest-value next correction or
+        investigation. Never bury a critical correctness violation beneath
+        minor differences.
+
+        Support repeated reconciliation as the project evolves, since
+        drift detection happens when this skill is invoked, with no
+        daemon or background monitoring. When previous results are
+        available, distinguish previously detected issues now resolved,
+        persisting discrepancies, newly introduced drift, and previously
+        unverified requirements now supported by evidence, re-evaluating
+        everything against the current project and never assuming a prior
+        discrepancy remains valid.

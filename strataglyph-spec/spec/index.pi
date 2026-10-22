@@ -1,0 +1,17 @@
+// The crux skills, tethered into tethers/crux by piton init. Re-exporting
+// them is what has the build emit them for each adapter; `piton update crux`
+// brings in a newer crux.
+from crux export *
+
+// The product specification. Every exported anchor is compiled into the
+// reference tree, and the anchors link to one another from there.
+from ./Access export *
+from ./Admin export *
+from ./Availability export *
+from ./Data export *
+from ./Email export *
+from ./Failures export *
+from ./Naming export *
+from ./Organizations export *
+from ./Product export *
+from ./Status export *
