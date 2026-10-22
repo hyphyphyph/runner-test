@@ -54,8 +54,9 @@ shared/              code shared by the server and the browser
   api.ts             the API contract: request and response types
   client.ts          the typed fetch client
 src/                 the browser app
-  main.ts            the page: projects, editable inputs and stored work
-  local/             the anonymous identity and browser-local projects
+  main.ts            the naming workspace: brief, generate control and candidates
+  local/             the anonymous identity, allowance and browser-local projects
+    allowance.ts     the free allowance left, in one place
     types.ts         the stored-work shapes
     workspace.ts     the local store and its project rules
     memory-storage.ts  a fallback when localStorage is unavailable
@@ -65,6 +66,29 @@ tests/
 scripts/dev.mjs      starts Vite and the API together
 .github/workflows/   continuous integration
 ```
+
+## The naming workspace
+
+The page opens on the naming workspace itself. A browser with no project gets
+one empty `Untitled project`, so there is no separate create-project screen.
+The project switcher sits in the sidebar, with a compact selector and a list
+that shows each project's name counts.
+
+The workspace holds:
+
+- a required company description and an optional industry or category,
+  saved in this browser as the person writes
+- the optional six-field style form that shapes the next round
+- a Generate names control, shown with the candidate area it fills
+- an empty candidate area on the first visit
+- a sticky remaining-allowance slot in the top bar, showing rounds, revisions
+  and checks left this month
+
+The shipped free allowance values (5 rounds, 3 revisions and 36 checks) live
+in `src/local/allowance.ts` until the operator settings route reaches the
+browser. A later work item connects generation to the control; for now a
+valid submission saves the brief, says plainly that no round ran, and spends
+nothing. Every customer-facing string uses `NameTempest` or `nametempest.com`.
 
 ## Browser-local projects
 

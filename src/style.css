@@ -90,13 +90,18 @@ a {
 }
 
 .topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding-bottom: 1.25rem;
+  padding: 1rem 0 1.1rem;
   border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg) 94%, transparent);
+  backdrop-filter: blur(10px);
 }
 
 .brand {
@@ -142,6 +147,45 @@ h3 {
 .tagline {
   color: var(--muted);
   font-size: 0.86rem;
+}
+
+.allowance-slot {
+  display: grid;
+  gap: 0.08rem;
+  min-width: 15rem;
+  padding: 0.55rem 0.85rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--border));
+  border-radius: var(--radius-small);
+  background: var(--accent-soft);
+}
+
+.allowance-label {
+  color: var(--accent);
+  font-size: 0.68rem;
+  font-weight: 750;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.allowance-value {
+  font-size: 0.84rem;
+  font-weight: 680;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.allowance-note {
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.allowance-slot[data-remaining-rounds="0"] {
+  border-color: color-mix(in srgb, var(--warn) 40%, var(--border));
+  background: var(--warn-soft);
+}
+
+.allowance-slot[data-remaining-rounds="0"] .allowance-label {
+  color: var(--warn);
 }
 
 .identity-card {
@@ -200,6 +244,31 @@ h3 {
   background: var(--accent-soft);
 }
 
+.intro {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.35rem 0.15rem 0.15rem;
+}
+
+.intro h2 {
+  max-width: 34ch;
+  font-size: clamp(1.7rem, 3vw, 2.35rem);
+  font-weight: 740;
+  letter-spacing: -0.04em;
+  line-height: 1.08;
+}
+
+.intro p {
+  max-width: 48rem;
+  color: var(--text);
+  font-size: 0.92rem;
+}
+
+.intro p.muted {
+  color: var(--muted);
+}
+
 .layout {
   display: grid;
   grid-template-columns: minmax(14rem, 18rem) minmax(0, 1fr);
@@ -210,7 +279,7 @@ h3 {
 
 .sidebar {
   position: sticky;
-  top: 1rem;
+  top: 5.5rem;
   display: flex;
   flex-direction: column;
   gap: 1rem;
@@ -237,6 +306,17 @@ h3 {
   text-transform: uppercase;
   letter-spacing: 0.12em;
   color: var(--muted);
+}
+
+.project-switcher {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.project-switcher select {
+  padding: 0.45rem 0.55rem;
+  font-size: 0.84rem;
 }
 
 .project-list {
@@ -375,6 +455,47 @@ h3 {
   color: var(--muted);
   font-size: 0.78rem;
   font-variant-numeric: tabular-nums;
+}
+
+.brief-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.generate-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+  padding-top: 0.15rem;
+}
+
+.generate-row .button[disabled] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.required-mark,
+.optional-mark {
+  display: inline-block;
+  margin-left: 0.3rem;
+  font-size: 0.66rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
+}
+
+.required-mark {
+  color: var(--accent);
+}
+
+.optional-mark {
+  color: var(--muted);
+}
+
+.candidates-card .empty-state {
+  border-top: 1px solid var(--border);
 }
 
 .field,
@@ -838,6 +959,10 @@ textarea {
   .check-groups,
   .usage-grid {
     grid-template-columns: 1fr;
+  }
+
+  .allowance-slot {
+    width: 100%;
   }
 
   .project-title-row {

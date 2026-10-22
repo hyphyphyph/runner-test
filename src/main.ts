@@ -1,6 +1,7 @@
 import './style.css'
 import { api } from '../shared/client.ts'
-import type { Candidate, DomainResult, Project, ProjectSummary, StyleChoices } from './local/types.ts'
+import type { AnonymousIdentity, Candidate, DomainResult, Project, ProjectSummary, StyleChoices } from './local/types.ts'
+import { hasRoundLeft, remainingAllowance } from './local/allowance.ts'
 import { MemoryStorage } from './local/memory-storage.ts'
 import { ANONYMOUS_STORAGE_PREFIX, BrowserWorkspace, WorkspaceError } from './local/workspace.ts'
 
@@ -56,6 +57,38 @@ function summaryLine(project: ProjectSummary): string {
   return pieces.join(' · ')
 }
 
+/**
+ * The remaining free allowance, in words a person reads at a glance. It is
+ * rendered on every visit, in every project, and while a project is empty.
+ */
+function renderAllowance(identity: AnonymousIdentity): string {
+  const remaining = remainingAllowance(identity.usage)
+  const counts = [
+    plural(remaining.rounds, 'round', 'rounds'),
+    plural(remaining.revisions, 'revision', 'revisions'),
+    plural(remaining.checks, 'check', 'checks'),
+  ].join(' · ')
+
+  return `
+    <section
+      class="allowance-slot"
+      id="allowance"
+      data-allowance="remaining"
+      data-remaining-rounds="${remaining.rounds}"
+      aria-label="Remaining free allowance"
+    >
+      <span class="allowance-label">Free allowance remaining</span>
+      <strong class="allowance-value">${escapeHtml(counts)} this month</strong>
+      <span class="allowance-note">Saved in this browser · nothing to install</span>
+    </section>
+  `
+}
+
+/** A round needs a round's worth of free allowance. */
+function canAffordRound(identity: AnonymousIdentity): boolean {
+  return hasRoundLeft(remainingAllowance(identity.usage))
+}
+
 function formatTime(value: number): string {
   try {
     return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(value)
@@ -78,6 +111,18 @@ function perform(action: () => void): void {
     notice = { kind: 'error', text: messageFor(error) }
   }
   render()
+}
+
+/** Keep the generate control in step with the allowance that remains. */
+function syncGenerateButton(): void {
+  const button = app.querySelector<HTMLButtonElement>('button[data-action="generate"]')
+  if (button === null) return
+  button.disabled = !canAffordRound(workspace.identity())
+}
+
+/** Put the cursor where the required description is written. */
+function focusDescription(): void {
+  app.querySelector<HTMLTextAreaElement>('textarea[data-field="description"]')?.focus()
 }
 
 function domainLabel(status: DomainResult['status']): string {
@@ -152,6 +197,59 @@ function renderProjectList(projects: ProjectSummary[], activeId: string | null):
       `,
     )
     .join('')
+}
+
+/**
+ * A compact project switcher beside the fuller project list. It stays usable
+ * when the list is long or the page is narrow, and it names the open project
+ * with its real name rather than the word "project".
+ */
+function renderProjectSwitcher(projects: ProjectSummary[], activeId: string | null): string {
+  if (projects.length === 0) {
+    return `
+      <label class="project-switcher">
+        <span class="label-text">Switch project</span>
+        <select id="project-switcher" aria-label="Project switcher" disabled>
+          <option>No projects yet</option>
+        </select>
+      </label>
+    `
+  }
+
+  return `
+    <label class="project-switcher">
+      <span class="label-text">Switch project</span>
+      <select id="project-switcher" aria-label="Project switcher">
+        ${projects
+          .map(
+            (project) =>
+              `<option value="${escapeHtml(project.id)}"${project.id === activeId ? ' selected' : ''}>${escapeHtml(project.name)}</option>`,
+          )
+          .join('')}
+      </select>
+    </label>
+  `
+}
+
+/** The product explanation shown before anything has been generated. */
+function renderIntro(): string {
+  return `
+    <section class="intro" aria-labelledby="intro-heading">
+      <p class="eyebrow">Company naming</p>
+      <h2 id="intro-heading">Find a name you would be glad to use.</h2>
+      <p>
+        NameTempest turns a plain description of your company into a round of
+        name candidates. Each name comes with a sentence on why it fits and up
+        to five other endings worth checking. Keep the names you like, check
+        which have a .com domain that is still free to register, and tick any
+        suggested endings you want checked too.
+      </p>
+      <p class="muted small">
+        One workspace for a solo founder, a small business or an agency naming
+        for several clients.
+      </p>
+    </section>
+  `
 }
 
 function renderCandidate(project: Project, candidate: Candidate): string {
@@ -355,25 +453,6 @@ function renderChecks(project: Project): string {
   `
 }
 
-function renderUsage(project: Project): string {
-  return `
-    <section class="card usage-card">
-      <div class="section-head">
-        <div>
-          <h2>Usage in this project</h2>
-          <p class="muted small">Counted against this browser's anonymous identity.</p>
-        </div>
-      </div>
-      <dl class="usage-grid">
-        <div><dt>Rounds</dt><dd>${project.usage.rounds}</dd></div>
-        <div><dt>Revisions</dt><dd>${project.usage.revisions}</dd></div>
-        <div><dt>Checks</dt><dd>${project.usage.checks}</dd></div>
-        <div><dt>Credits</dt><dd>${project.usage.credits}</dd></div>
-      </dl>
-    </section>
-  `
-}
-
 function renderStyle(project: Project): string {
   const nameOptions = [
     ['', 'No preference'],
@@ -447,8 +526,16 @@ function renderStyle(project: Project): string {
   `
 }
 
-function renderWorkspace(project: Project): string {
+function renderWorkspace(project: Project, identity: AnonymousIdentity): string {
+  const generateAllowed = canAffordRound(identity)
+  const hasWork =
+    project.candidates.length > 0 ||
+    project.domainResults.length > 0 ||
+    project.pendingChecks.length > 0
+
   return `
+    ${renderIntro()}
+
     <header class="project-head">
       <div class="project-title-row">
         <label class="sr-only" for="project-name">Project name</label>
@@ -470,80 +557,100 @@ function renderWorkspace(project: Project): string {
       </p>
     </header>
 
-    <section class="card">
+    <section class="card brief-card" aria-labelledby="brief-heading">
       <div class="section-head">
         <div>
-          <h2>Company</h2>
-          <p class="muted small">Saved in this browser only.</p>
+          <h2 id="brief-heading">Company</h2>
+          <p class="muted small">Saved in this browser only. The description is the only required field.</p>
         </div>
       </div>
-      <label class="field">
-        <span class="label-text">Description</span>
-        <textarea data-field="description" rows="5" placeholder="Describe the company in your own words">${escapeHtml(project.description)}</textarea>
-      </label>
-      <label class="field field-narrow">
-        <span class="label-text">Industry or category</span>
-        <input data-field="industry" type="text" value="${escapeHtml(project.industry)}" placeholder="Optional" />
-      </label>
+      <form class="brief-form" data-form="generate" novalidate>
+        <label class="field">
+          <span class="label-text">
+            Company description
+            <span class="required-mark">required</span>
+          </span>
+          <textarea
+            name="description"
+            data-field="description"
+            rows="5"
+            required
+            aria-required="true"
+            aria-describedby="description-hint"
+            placeholder="Describe the company in your own words"
+          >${escapeHtml(project.description)}</textarea>
+          <span id="description-hint" class="field-hint">
+            What does the company do, who is it for, and what should the name feel like?
+          </span>
+        </label>
+        <label class="field field-narrow">
+          <span class="label-text">
+            Industry or category
+            <span class="optional-mark">optional</span>
+          </span>
+          <input
+            name="industry"
+            data-field="industry"
+            type="text"
+            value="${escapeHtml(project.industry)}"
+            placeholder="Such as software, bakery or design studio"
+            autocomplete="off"
+          />
+        </label>
+        <div class="generate-row">
+          <button
+            class="button primary"
+            type="submit"
+            data-action="generate"
+            aria-describedby="generate-hint"
+            ${generateAllowed ? '' : 'disabled'}
+          >Generate names</button>
+          <span id="generate-hint" class="muted small">
+            A round spends from the free allowance shown above. A round that fails spends nothing.
+          </span>
+        </div>
+      </form>
     </section>
 
     ${renderStyle(project)}
-    <section class="card">
+
+    <section class="card candidates-card" id="candidates" aria-labelledby="candidates-heading">
       <div class="section-head">
         <div>
-          <h2>Names</h2>
-          <p class="muted small">Every name keeps its own reason, style and endings.</p>
+          <h2 id="candidates-heading">Candidates</h2>
+          <p class="muted small">Every name keeps its own reason, style and suggested endings.</p>
         </div>
         <span class="count">${project.candidates.length}</span>
       </div>
       ${renderNames(project)}
     </section>
-    ${renderChecks(project)}
-    ${renderRejected(project)}
-    ${renderNotes(project)}
-    ${renderUsage(project)}
+    ${hasWork ? renderChecks(project) : ''}
+    ${project.candidates.length > 0 ? renderRejected(project) : ''}
+    ${project.candidates.length > 0 ? renderNotes(project) : ''}
   `
 }
 
-function renderEmptyWorkspace(): string {
-  return `
-    <section class="empty-workspace">
-      <p class="eyebrow">No account needed</p>
-      <h2>Start a naming project</h2>
-      <p>
-        Describe the company you are naming. Every project you make stays in
-        this browser, with its own names, notes, rejections, check results and
-        usage.
-      </p>
-      <button class="button primary" type="button" data-action="new-project">Create your first project</button>
-    </section>
-  `
-}
 
 function render(): void {
   try {
     const identity = workspace.identity()
+    // The naming workspace is the page, not a step behind a "create project"
+    // button. A browser with no project opens on a new, empty one.
+    const project = workspace.activeProject() ?? workspace.createProject()
     const projects = workspace.listProjects()
-    const activeId = workspace.activeProjectId()
-    const project = activeId === null ? null : workspace.project(activeId)
+    const activeId = project.id
 
     app.innerHTML = `
       <div class="shell">
         <header class="topbar">
           <div class="brand">
-            <span class="brand-mark" aria-hidden="true">NT</span>
+            <span class="brand-mark" aria-hidden="true">N</span>
             <div>
               <h1>NameTempest</h1>
               <p class="tagline">Find a company name you would be glad to use.</p>
             </div>
           </div>
-          <div class="identity-card">
-            <span class="identity-dot" aria-hidden="true"></span>
-            <div>
-              <strong>Anonymous browser</strong>
-              <span>No sign-in · work stays in this browser</span>
-            </div>
-          </div>
+          ${renderAllowance(identity)}
         </header>
 
         ${renderNotice()}
@@ -554,27 +661,20 @@ function render(): void {
               <h2>Projects</h2>
               <button class="button primary small" type="button" data-action="new-project">New project</button>
             </div>
-            <nav class="project-list" aria-label="Projects">
+            ${renderProjectSwitcher(projects, activeId)}
+            <nav class="project-list" aria-label="Project list">
               ${renderProjectList(projects, activeId)}
             </nav>
             <div class="sidebar-foot">
               <p class="eyebrow">This browser</p>
               <p class="muted small">
-                Anonymous identity <code title="${escapeHtml(identity.id)}">${escapeHtml(identity.id.slice(0, 8))}</code>
-                · created ${escapeHtml(formatTime(identity.createdAt))}
-              </p>
-              <p class="muted small">
-                This month: ${identity.usage.rounds} rounds, ${identity.usage.revisions} revisions,
-                ${identity.usage.checks} checks.
-              </p>
-              <p class="muted small">
-                Projects live in local storage. Clearing site data removes them.
+                Projects stay here until you delete them. Clearing site data removes them.
               </p>
             </div>
           </aside>
 
           <main class="content">
-            ${project === null ? renderEmptyWorkspace() : renderWorkspace(project)}
+            ${renderWorkspace(project, identity)}
           </main>
         </div>
 
@@ -678,6 +778,13 @@ app.addEventListener('change', (event) => {
   ) {
     return
   }
+
+  if (target instanceof HTMLSelectElement && target.id === 'project-switcher') {
+    const id = target.value
+    if (id.length > 0) perform(() => workspace.setActiveProject(id))
+    return
+  }
+
   const field = target.dataset.field
   if (field === undefined) return
   const active = workspace.activeProject()
@@ -702,6 +809,30 @@ app.addEventListener('change', (event) => {
   }
 })
 
+// The company fields save as the person writes, so switching projects or
+// closing the tab never loses a description they were in the middle of.
+app.addEventListener('input', (event) => {
+  const target = event.target
+  if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) return
+  const field = target.dataset.field
+  if (field !== 'description' && field !== 'industry') return
+
+  const active = workspace.activeProject()
+  if (active === null) return
+
+  try {
+    if (field === 'description') {
+      workspace.updateProject(active.id, { description: target.value })
+    } else {
+      workspace.updateProject(active.id, { industry: target.value })
+    }
+    syncGenerateButton()
+  } catch (error) {
+    notice = { kind: 'error', text: messageFor(error) }
+    render()
+  }
+})
+
 app.addEventListener('keydown', (event) => {
   if (event.key !== 'Enter') return
   const target = event.target
@@ -721,7 +852,33 @@ app.addEventListener('submit', (event) => {
 
   const data = new FormData(form)
   const kind = form.dataset.form
-  if (kind === 'add-note') {
+  if (kind === 'generate') {
+    const description = active.description.trim()
+    if (description.length === 0) {
+      notice = { kind: 'error', text: 'Write a company description before generating names.' }
+      render()
+      focusDescription()
+      return
+    }
+
+    if (!hasRoundLeft(remainingAllowance(workspace.identity().usage))) {
+      notice = {
+        kind: 'info',
+        text: 'The free allowance for this month is used up. Everything already on screen stays here.',
+      }
+      render()
+      return
+    }
+
+    // Generation is built as its own work item. Until it is connected here,
+    // the control saves the brief and spends nothing rather than pretending a
+    // round ran.
+    notice = {
+      kind: 'info',
+      text: 'Name generation is not connected in this step yet. Your company description is saved and no allowance was spent.',
+    }
+    render()
+  } else if (kind === 'add-note') {
     const name = String(data.get('name') ?? '')
     const body = String(data.get('body') ?? '')
     perform(() => workspace.addNote(active.id, { name, body }))
