@@ -1,8 +1,7 @@
 :root {
-  font-family: system-ui, sans-serif;
+  color-scheme: light dark;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   line-height: 1.5;
-  color: #1a1a1a;
-  background: #ffffff;
 }
 
 body {
@@ -13,5 +12,17 @@ body {
 }
 
 main {
+  padding: 2rem;
   text-align: center;
+}
+
+.server-status {
+  margin-top: 1.5rem;
+  font-size: 0.875rem;
+  opacity: 0.75;
+}
+
+.server-status[data-state="unreachable"] {
+  opacity: 1;
+  color: #b42318;
 }
