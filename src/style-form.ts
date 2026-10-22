@@ -94,52 +94,54 @@ export function renderStyleForm(style: StyleChoices, lists: StyleLists): string 
           </p>
         </div>
       </div>
-      <div class="style-grid">
-        <label>
-          <span class="label-text">Naming style</span>
-          <select data-field="style.namingStyle">${optionRows(lists.namingStyles, style.namingStyle)}</select>
-        </label>
-        <label>
-          <span class="label-text">Tone</span>
-          <select data-field="style.tone">${optionRows(lists.tones, style.tone)}</select>
-        </label>
-        <label>
-          <span class="label-text">Length</span>
-          <select data-field="style.length">${optionRows(LENGTH_OPTIONS, style.length)}</select>
-        </label>
-        <label>
-          <span class="label-text">Things to include</span>
-          <input
-            data-field="style.include"
-            type="text"
-            value="${escapeHtml(style.include)}"
-            placeholder="Words or sounds"
-            autocomplete="off"
-          />
-          <span class="field-hint">Read as data, never as an instruction.</span>
-        </label>
-        <label>
-          <span class="label-text">Things to avoid</span>
-          <input
-            data-field="style.avoid"
-            type="text"
-            value="${escapeHtml(style.avoid)}"
-            placeholder="Words, sounds or competitors"
-            autocomplete="off"
-          />
-          <span class="field-hint">Read as data, never as an instruction.</span>
-        </label>
-        <fieldset class="style-endings">
-          <legend class="label-text">Preferred endings</legend>
-          <p class="field-hint">
-            A preference guides the endings the model suggests. It never ticks or checks a pair;
-            you still choose what to check.
-          </p>
-          ${endingChoices}
-          <p class="field-hint">Leave every box unticked for no preference.</p>
-          ${legacyEndings}
-        </fieldset>
-      </div>
+      <form class="style-form" data-form="style" novalidate>
+        <div class="style-grid">
+          <label>
+            <span class="label-text">Naming style</span>
+            <select data-field="style.namingStyle">${optionRows(lists.namingStyles, style.namingStyle)}</select>
+          </label>
+          <label>
+            <span class="label-text">Tone</span>
+            <select data-field="style.tone">${optionRows(lists.tones, style.tone)}</select>
+          </label>
+          <label>
+            <span class="label-text">Length</span>
+            <select data-field="style.length">${optionRows(LENGTH_OPTIONS, style.length)}</select>
+          </label>
+          <label>
+            <span class="label-text">Things to include</span>
+            <input
+              data-field="style.include"
+              type="text"
+              value="${escapeHtml(style.include)}"
+              placeholder="Words or sounds"
+              autocomplete="off"
+            />
+            <span class="field-hint">Read as data, never as an instruction.</span>
+          </label>
+          <label>
+            <span class="label-text">Things to avoid</span>
+            <input
+              data-field="style.avoid"
+              type="text"
+              value="${escapeHtml(style.avoid)}"
+              placeholder="Words, sounds or competitors"
+              autocomplete="off"
+            />
+            <span class="field-hint">Read as data, never as an instruction.</span>
+          </label>
+          <fieldset class="style-endings">
+            <legend class="label-text">Preferred endings</legend>
+            <p class="field-hint">
+              A preference guides the endings the model suggests. It never ticks or checks a pair;
+              you still choose what to check.
+            </p>
+            ${endingChoices}
+            <p class="field-hint">Leave every box unticked for no preference.</p>
+            ${legacyEndings}
+          </fieldset>
+        </div>
+      </form>
     </section>
   `
 }

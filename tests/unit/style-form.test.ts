@@ -36,6 +36,7 @@ describe('the six-field style form', () => {
   test('it shows exactly the six fields from the specification', () => {
     const html = renderStyleForm(style(), lists())
 
+    assert.match(html, /<form class="style-form" data-form="style" novalidate>/)
     for (const field of STYLE_FORM_FIELDS) {
       assert.match(html, new RegExp(`data-field="${field}"`), `missing ${field}`)
     }
