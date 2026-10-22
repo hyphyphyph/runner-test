@@ -832,7 +832,7 @@ app.addEventListener('submit', (event) => {
     // round ran.
     notice = {
       kind: 'info',
-      text: 'Name generation is not connected in this step yet. Your company description is saved and no allowance was spent.',
+      text: 'Name generation is not connected in this step yet. Your company description and style choices are saved and no allowance was spent.',
     }
     render()
   } else if (kind === 'add-note') {

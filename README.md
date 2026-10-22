@@ -91,8 +91,9 @@ The workspace holds:
 The shipped free allowance values (5 rounds, 3 revisions and 36 checks) live
 in `src/local/allowance.ts` until the operator settings route reaches the
 browser. A later work item connects generation to the control; for now a
-valid submission saves the brief, says plainly that no round ran, and spends
-nothing. Every customer-facing string uses `NameTempest` or `nametempest.com`.
+valid submission saves the brief and style choices, says plainly that no
+round ran, and spends nothing. Every customer-facing string uses
+`NameTempest` or `nametempest.com`.
 
 ### The style form
 
