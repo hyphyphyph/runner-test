@@ -104,31 +104,30 @@ async function runModel(
   const drop: string[] = []
   const errors: ModelError[] = []
   const exclude = () => candidates(ctx, p.id).map((c) => c.name)
-  await Promise.all(
-    sizes.map(async (size, i) => {
-      // Later chunks ask for different territory to reduce overlap.
-      const req: NameRequest = { ...base, count: size, exclude: exclude() }
-      if (i > 0 && req.kind === 'generate') req.description += `\n(Variation ${i + 1}: explore a different angle from the obvious one.)`
-      for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
+  const ask = async (size: number, variation: number) => {
+    const req: NameRequest = { ...base, count: size, exclude: exclude(), variation }
+    for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
+      if (signal.aborted) return
+      try {
+        const raw = await provider.call(model, req, signal)
+        const reply = parseReply(raw)
+        if (!reply) throw new ModelError('The naming model replied in a shape we could not use.', 'invalid shape')
+        const names: RawName[] = reply.names.slice(0, size + 2)
+        const fresh = addCandidates(ctx, actor, p.id, round, names)
+        added.push(...fresh)
+        drop.push(...reply.drop)
+        if (fresh.length) ctx.live.publish(p.id, { type: 'round', roundId, state: 'names', count: added.length })
+        return
+      } catch (e) {
         if (signal.aborted) return
-        try {
-          const raw = await provider.call(model, req, signal)
-          const reply = parseReply(raw)
-          if (!reply) throw new ModelError('The naming model replied in a shape we could not use.', 'invalid shape')
-          const names: RawName[] = reply.names.slice(0, size + 2)
-          const fresh = addCandidates(ctx, actor, p.id, round, names)
-          added.push(...fresh)
-          drop.push(...reply.drop)
-          if (fresh.length) ctx.live.publish(p.id, { type: 'round', roundId, state: 'names', count: added.length })
-          return
-        } catch (e) {
-          if (signal.aborted) return
-          const err = e instanceof ModelError ? e : new ModelError('The naming model failed.', String(e))
-          if (attempt === ATTEMPTS) errors.push(err)
-        }
+        const err = e instanceof ModelError ? e : new ModelError('The naming model failed.', String(e))
+        if (attempt === ATTEMPTS) errors.push(err)
       }
-    }),
-  )
+    }
+  }
+  await Promise.all(sizes.map((size, i) => ask(size, i)))
+  // Parallel requests can overlap; top up once towards the full batch.
+  if (!signal.aborted && added.length > 0 && added.length < count) await ask(count - added.length, sizes.length)
   return { added, drop, errors }
 }
 

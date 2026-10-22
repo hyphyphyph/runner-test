@@ -87,6 +87,7 @@ export class Alerts {
       run(
         this.db,
         'insert into alerts (part, began_at, last_at, failures, people, reason, detail) values (?, ?, ?, ?, ?, ?, ?)',
+        part,
         now,
         now,
         recent.length,

@@ -17,6 +17,8 @@ export interface NameRequest {
   kept?: string[]
   current?: string[]
   direction?: { text: string; buildOn: string[]; avoid: string }
+  // Parallel requests in one round ask for different territory.
+  variation?: number
 }
 
 export interface RawName {
@@ -90,6 +92,7 @@ export function buildPrompt(req: NameRequest): string {
     `<person_input>\nCompany description:\n${quote(req.description)}\n${req.industry ? `Industry: ${quote(req.industry)}\n` : ''}${style}\n</person_input>`,
     `<exclude>\n${req.exclude.join('\n')}\n</exclude>`,
   ]
+  if (req.variation) parts.push(`This is request ${req.variation + 1} of several in parallel: explore a different angle from the most obvious one.`)
   if (req.kind === 'revise') {
     const d = req.direction!
     parts.push(
@@ -187,7 +190,7 @@ export class DemoProvider implements ModelProvider {
     const suffixes = ['ly', 'io', 'ora', 'ify', 'era', 'ex', 'wise', 'hub', 'nest', 'forge', 'leaf', 'lane']
     const prefixes = ['bright', 'true', 'north', 'blue', 'kin', 'clear', 'swift', 'oak', 'fern', 'lumen']
     const excluded = new Set(req.exclude.map(nameKey))
-    const seed = createHash('sha256').update(req.description + req.exclude.length).digest()
+    const seed = createHash('sha256').update(req.description + (req.direction?.text ?? '') + req.exclude.length + ':' + (req.variation ?? 0)).digest()
     const out: RawName[] = []
     for (let i = 0; out.length < req.count && i < 400; i++) {
       const b = seed[i % seed.length] + i
