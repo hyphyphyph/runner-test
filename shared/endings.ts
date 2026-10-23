@@ -30,11 +30,12 @@ export interface OfferedEnding {
   /** The registry's terms allow a hosted product to query it at this volume. */
   termsAllowHostedQueries: boolean
   /**
-   * The product always offers this ending, even before the first refresh. It
-   * is true only for the ending the specification promises, .com.
+   * The specification names this ending, so it has one seeded row before the
+   * first refresh. It is true only for .com. Once the sources have been read,
+   * .com is judged by the same three facts as every other ending.
    */
   requiredByProduct: boolean
-  /** All three conditions hold, or the product requires it. */
+  /** All three conditions hold. */
   offered: boolean
   /** The first condition that failed, or null when the ending is offered. */
   reasonCode: OfferedEndingReasonCode | null

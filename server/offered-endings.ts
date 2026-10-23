@@ -251,15 +251,19 @@ export class OfferedEndingStore {
     return this.report().offeredEndings
   }
 
-  /** True when one ending may be suggested or ticked. */
+  /**
+   * True when one ending may be suggested or ticked. The answer comes only
+   * from the refreshed rows, so an ending that is not in the store is not
+   * offered. The one seeded `.com` row is what answers before the first
+   * refresh; nothing else is assumed.
+   */
   isOffered(ending: string): boolean {
     const clean = ending.trim().replace(/^\.+/, '').toLowerCase()
     if (!isEnding(clean)) return false
     const row = this.#db
       .prepare('select offered from offered_endings where ending = ?')
       .get(clean) as { offered: number } | undefined
-    if (row !== undefined) return row.offered === 1
-    return REQUIRED_OFFERED_ENDINGS.includes(clean)
+    return row !== undefined && row.offered === 1
   }
 
   /** The state of the last refresh. */
@@ -287,7 +291,7 @@ export class OfferedEndingStore {
 
       let bootstrap: unknown
       try {
-        bootstrap = JSON.parse(bootstrapText)
+        bootstrap = JSON.parse(bootstrapText.replace(/^\uFEFF/, ''))
       } catch (error) {
         throw new OfferedEndingRefreshError(
           'rdap_bootstrap_invalid',
@@ -416,51 +420,53 @@ export class OfferedEndingStore {
     const reason = normalizeReason(options.reason)
     const now = (options.now ?? this.#now()).getTime()
 
-    this.#db
-      .prepare(
-        `insert into registry_terms
-          (ending, allows_hosted_queries, reason, decided_at, decided_by)
-         values (?, ?, ?, ?, ?)
-         on conflict(ending) do update set
-           allows_hosted_queries = excluded.allows_hosted_queries,
-           reason = excluded.reason,
-           decided_at = excluded.decided_at,
-           decided_by = excluded.decided_by`,
-      )
-      .run(clean, allowsHostedQueries ? 1 : 0, reason, now, operator)
+    this.#transaction(() => {
+      this.#db
+        .prepare(
+          `insert into registry_terms
+            (ending, allows_hosted_queries, reason, decided_at, decided_by)
+           values (?, ?, ?, ?, ?)
+           on conflict(ending) do update set
+             allows_hosted_queries = excluded.allows_hosted_queries,
+             reason = excluded.reason,
+             decided_at = excluded.decided_at,
+             decided_by = excluded.decided_by`,
+        )
+        .run(clean, allowsHostedQueries ? 1 : 0, reason, now, operator)
 
-    const row = this.#db
-      .prepare(
-        `select ending, in_root_zone, registration_query_url
-         from offered_endings where ending = ?`,
-      )
-      .get(clean) as
-      | { ending: string; in_root_zone: number; registration_query_url: string | null }
-      | undefined
-    if (row === undefined) return
+      const row = this.#db
+        .prepare(
+          `select ending, in_root_zone, registration_query_url
+           from offered_endings where ending = ?`,
+        )
+        .get(clean) as
+        | { ending: string; in_root_zone: number; registration_query_url: string | null }
+        | undefined
+      if (row === undefined) return
 
-    const decision = decideEnding({
-      ending: row.ending,
-      inRootZone: row.in_root_zone === 1,
-      registrationQueryUrl: row.registration_query_url,
-      terms: { allowed: allowsHostedQueries, reason },
+      const decision = decideEnding({
+        ending: row.ending,
+        inRootZone: row.in_root_zone === 1,
+        registrationQueryUrl: row.registration_query_url,
+        terms: { allowed: allowsHostedQueries, reason },
+      })
+
+      this.#db
+        .prepare(
+          `update offered_endings set
+             terms_allow_hosted_queries = ?, offered = ?, reason_code = ?,
+             reason = ?, source = 'terms', updated_at = ?
+           where ending = ?`,
+        )
+        .run(
+          decision.termsAllowHostedQueries ? 1 : 0,
+          decision.offered ? 1 : 0,
+          decision.reasonCode,
+          decision.reason,
+          now,
+          clean,
+        )
     })
-
-    this.#db
-      .prepare(
-        `update offered_endings set
-           terms_allow_hosted_queries = ?, offered = ?, reason_code = ?,
-           reason = ?, source = 'terms', updated_at = ?
-         where ending = ?`,
-      )
-      .run(
-        decision.termsAllowHostedQueries ? 1 : 0,
-        decision.offered ? 1 : 0,
-        decision.reasonCode,
-        decision.reason,
-        now,
-        clean,
-      )
   }
 
   // ---- internals --------------------------------------------------------
@@ -486,7 +492,16 @@ export class OfferedEndingStore {
         `The source ${url} answered with status ${response.status}, so the offered-ending list was left as it was.`,
       )
     }
-    return response.text()
+
+    try {
+      return await response.text()
+    } catch (error) {
+      throw new OfferedEndingRefreshError(
+        'source_unreachable',
+        `The source ${url} could not be read, so the offered-ending list was left as it was.`,
+        { cause: error },
+      )
+    }
   }
 
   #termsDecision(ending: string): { allowed: boolean; reason: string | null } {
@@ -571,9 +586,10 @@ function decideEnding(fact: EndingFacts): {
 } {
   const routeAnswersBoth = fact.registrationQueryUrl !== null
   const requiredByProduct = REQUIRED_OFFERED_ENDINGS.includes(fact.ending)
-  const offered =
-    requiredByProduct ||
-    (fact.inRootZone && routeAnswersBoth && fact.terms.allowed)
+  // The three tests hold together. The required `.com` row is seeded before
+  // the first refresh, but once the sources are read every ending, `.com`
+  // included, is judged on the same three facts.
+  const offered = fact.inRootZone && routeAnswersBoth && fact.terms.allowed
 
   let reasonCode: OfferedEndingReasonCode | null = null
   let reason: string | null = null
@@ -674,12 +690,13 @@ export function startOfferedEndingRefresh(
     void run().catch((error: unknown) => onError(error))
   }
 
-  if (options.runImmediately !== false) runQuietly()
-
   const interval = options.intervalMs ?? REFRESH_INTERVAL_MS
   if (!Number.isFinite(interval) || interval <= 0) {
     throw new RangeError('The offered-ending refresh interval must be a positive number of milliseconds.')
   }
+
+  if (options.runImmediately !== false) runQuietly()
+
   const timer = setInterval(runQuietly, interval)
   timer.unref()
 

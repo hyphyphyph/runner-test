@@ -86,8 +86,9 @@ export interface WorkspaceOptions {
   /** The storage namespace. Defaults to ANONYMOUS_STORAGE_PREFIX. */
   prefix?: string
   /**
-   * Endings that may be picked as a preference. Defaults to the shipped
-   * offered list; the page replaces it when the server's list arrives.
+   * Endings that may be picked as a preference. It starts empty because the
+   * offered list is built from the server's refreshed sources; the page sets
+   * it when that list arrives.
    */
   offeredEndings?: readonly string[]
 }

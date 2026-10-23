@@ -97,18 +97,19 @@ interface OptionRow {
 export class StyleListStore {
   readonly #db: Db
   readonly #now: () => Date
-  readonly #offered: string[]
+  readonly #offeredOverride: string[] | null
 
   constructor(db: Db, options: StyleListStoreOptions = {}) {
     this.#db = db
     this.#now = options.now ?? (() => new Date())
-    const offered = options.offeredEndings ?? new OfferedEndingStore(db).offered()
-    this.#offered = filterEndingPicks(offered, offered)
+    this.#offeredOverride =
+      options.offeredEndings === undefined ? null : filterEndingPicks(options.offeredEndings, options.offeredEndings)
   }
 
   /** The lists the form shows now. Endings are filtered to the offered set. */
   lists(): StyleLists {
-    this.#ensureSeeded()
+    const offered = this.#offered()
+    this.#ensureSeeded(offered)
 
     const namingStyles = this.#options('namingStyle')
     const tones = this.#options('tone')
@@ -117,14 +118,14 @@ export class StyleListStore {
       .all() as Array<{ ending: string }>
     const endings = filterEndingPicks(
       endingRows.map((row) => row.ending),
-      this.#offered,
+      offered,
     )
 
     return {
       namingStyles,
       tones,
       endings,
-      offeredEndings: [...this.#offered],
+      offeredEndings: offered,
     }
   }
 
@@ -217,9 +218,10 @@ export class StyleListStore {
     const clean = this.#ending(ending)
     const person = this.#operator(operator, 'ending')
     const note = normalizeReason(reason)
-    this.#ensureSeeded()
+    const offered = this.#offered()
+    this.#ensureSeeded(offered)
 
-    if (!this.#offered.includes(clean)) {
+    if (!offered.includes(clean)) {
       throw new StyleListError(
         'ending_not_offered',
         `.${clean} cannot be suggested or checked, so it cannot be a preferred ending.`,
@@ -285,7 +287,18 @@ export class StyleListStore {
 
   // ---- internals --------------------------------------------------------
 
-  #ensureSeeded(): void {
+  /**
+   * The endings that pass DomainCheck.offeredEndings right now. A caller may
+   * inject a set; otherwise the one refreshed store answers, so a daily
+   * refresh or an operator change applies to the next form shown.
+   */
+  #offered(): string[] {
+    if (this.#offeredOverride !== null) return [...this.#offeredOverride]
+    const offered = new OfferedEndingStore(this.#db).offered()
+    return filterEndingPicks(offered, offered)
+  }
+
+  #ensureSeeded(offered: string[] = this.#offered()): void {
     const marker = this.#db.prepare("select value from style_list_meta where key = 'seeded'").get()
     if (marker !== undefined) return
 
@@ -302,7 +315,7 @@ export class StyleListStore {
       })
 
       const addEnding = this.#db.prepare('insert or ignore into style_endings (ending, position) values (?, ?)')
-      filterEndingPicks(SHIPPED_STYLE_LISTS.endings, this.#offered).forEach((ending, index) => {
+      filterEndingPicks(SHIPPED_STYLE_LISTS.endings, offered).forEach((ending, index) => {
         addEnding.run(ending, index)
       })
 

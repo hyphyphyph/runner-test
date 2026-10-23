@@ -4,7 +4,7 @@
 // client in ./client.ts, and by the browser through that client, so both
 // ends of every call are checked against the same shape.
 
-import type { OfferedEnding } from './endings.ts'
+import type { OfferedEndingsReport } from './endings.ts'
 import type { StyleLists } from './style.ts'
 
 /** The answer to a database check inside the health report. */
@@ -47,6 +47,12 @@ export interface ApiContract {
    * shipped lists when the server cannot answer.
    */
   'GET /api/style-lists': { response: StyleLists }
+  /**
+   * Every ending the daily refresh has seen, with the facts behind its offer
+   * and the reason it is refused. The admin interface reads this report; the
+   * style form reads only `offeredEndings` from it.
+   */
+  'GET /api/offered-endings': { response: OfferedEndingsReport }
 }
 
 export type ApiRoute = keyof ApiContract

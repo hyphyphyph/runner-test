@@ -49,6 +49,7 @@ server/              the API process
   db.ts              opening the database and applying migrations
   migrations/        numbered SQL migrations, applied in order
   settings.ts        operator limit settings, defaults and change record
+  offered-endings.ts the daily root zone and RDAP refresh behind offered endings
   style-lists.ts     the operator's style, tone and ending pick lists
   allowance.ts       counters, monthly refresh, atomic spend and reservations
   version.ts         version read from package.json
@@ -206,6 +207,28 @@ The account and organization counters are ready for the sign-in, billing and
 organization work items. No unauthenticated API route exposes them; the
 routes that name a subject arrive with the code that authenticates it.
 
+### Offered endings
+
+`server/offered-endings.ts` runs the daily refresh behind
+`DomainCheck.offeredEndings`. It fetches the IANA root zone list and the IANA
+RDAP bootstrap file, then records three facts for every ending it has seen:
+whether the root zone lists it, whether the bootstrap file gives it an RDAP
+service that can answer both free and taken, and whether its registry terms
+allow a hosted product to query it. An ending is offered only when all three
+hold. `.com` has one seeded row so a fresh install has an offered ending before
+the first refresh, and after that it is judged by the same three facts as every
+other ending.
+
+An ending that is not offered keeps its failed facts and a plain reason, so the
+admin interface can explain it. A failed fetch or malformed file leaves the
+last good list in place and records the error and refresh times. The refresh
+runs once at server start and once a day after that. Every other part reads
+`OfferedEndingStore.report()` or `.offered()`; there is no second list of
+endings in code. The ending pick list draws from it, and an operator records a
+registry terms refusal with a reason in `registry_terms`. The list of registry
+terms is not published in a machine-readable form, so an unrecorded registry is
+allowed by default and the operator must settle its terms before launch.
+
 ### Privacy rules in the schema
 
 The schema follows the specification's StoredWork anchor:
@@ -266,6 +289,39 @@ that list may draw from. The shipped lists live in `shared/style.ts`. An
 operator change is made through `StyleListStore` in `server/style-lists.ts`;
 the admin route that calls it arrives with the admin interface and its
 operator authentication.
+
+### `GET /api/offered-endings`
+
+Returns every ending the daily refresh has seen, with the facts behind its
+offer and the reason it is refused:
+
+```json
+{
+  "endings": [
+    {
+      "ending": "com",
+      "inRootZone": true,
+      "routeAnswersBoth": true,
+      "termsAllowHostedQueries": true,
+      "requiredByProduct": true,
+      "offered": true,
+      "reasonCode": null,
+      "reason": null,
+      "registrationQueryUrl": "https://rdap.verisign.com/com/v1/",
+      "source": "refresh",
+      "updatedAt": 1790000000000
+    }
+  ],
+  "offeredEndings": ["com"],
+  "refreshedAt": 1790000000000
+}
+```
+
+A refused ending has `offered: false` and a `reasonCode` of
+`not_in_root_zone`, `route_cannot_settle` or `terms_disallow`, with plain words
+in `reason`. Before the first successful refresh the report holds only the
+seeded `.com` row and `refreshedAt` is `null`. The admin interface reads this
+report; the style form reads the offered list through `GET /api/style-lists`.
 
 ### Typed client
 

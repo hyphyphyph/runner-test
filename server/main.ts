@@ -16,6 +16,7 @@ import { dirname, resolve } from 'node:path'
 import { createApp } from './app.ts'
 import type { Db } from './db.ts'
 import { openDatabase } from './db.ts'
+import { startOfferedEndingRefresh } from './offered-endings.ts'
 import { VERSION } from './version.ts'
 
 const databaseFile = process.env.NT_DB ?? resolve('data/nametempest.db')
@@ -44,10 +45,16 @@ try {
   process.exit(1)
 }
 
+// Refresh the offered endings from the public root zone list and RDAP
+// bootstrap file now and once a day after that. A failed refresh is logged and
+// the last good list stays in place, so it never blocks the API from starting.
+const offeredEndingRefresh = startOfferedEndingRefresh(db)
+
 const server = createApp({ db, version: VERSION })
 
 server.on('error', (error) => {
   console.error('The API server could not start.', error)
+  offeredEndingRefresh.stop()
   try {
     db.close()
   } catch {
@@ -73,6 +80,8 @@ function shutdown(signal: string): void {
     process.exit(1)
   }, 5000)
   forceClose.unref()
+
+  offeredEndingRefresh.stop()
 
   server.close((error) => {
     clearTimeout(forceClose)

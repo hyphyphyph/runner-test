@@ -7,7 +7,6 @@ import {
   filterEndingPicks,
   isStyleEmpty,
   LENGTH_OPTIONS,
-  SHIPPED_OFFERED_ENDINGS,
   SHIPPED_STYLE_LISTS,
   splitEndingPicks,
 } from '../../shared/style.ts'
@@ -101,7 +100,7 @@ describe('the style fields', () => {
 })
 
 describe('operator style pick lists', () => {
-  test('the shipped lists are the lists a fresh install shows', (t) => {
+  test('a fresh install offers only the required .com until the refresh runs', (t) => {
     const db = openDatabase(':memory:')
     t.after(() => db.close())
     const store = new StyleListStore(db)
@@ -109,8 +108,9 @@ describe('operator style pick lists', () => {
 
     assert.deepEqual(lists.namingStyles, SHIPPED_STYLE_LISTS.namingStyles)
     assert.deepEqual(lists.tones, SHIPPED_STYLE_LISTS.tones)
-    assert.deepEqual(lists.endings, [...SHIPPED_OFFERED_ENDINGS])
-    assert.deepEqual(lists.offeredEndings, [...SHIPPED_OFFERED_ENDINGS])
+    // The offered set comes from the refresh; the only seeded row is .com.
+    assert.deepEqual(lists.endings, ['com'])
+    assert.deepEqual(lists.offeredEndings, ['com'])
   })
 
   test('an operator can add, rename and remove a naming style', (t) => {

@@ -14,12 +14,18 @@ function ids(): () => string {
   return () => `id-${++nextId}`
 }
 
-function openWorkspace(storage: KeyValueStorage, clock: { now: number }, prefix?: string): BrowserWorkspace {
+function openWorkspace(
+  storage: KeyValueStorage,
+  clock: { now: number },
+  prefix?: string,
+  offeredEndings?: readonly string[],
+): BrowserWorkspace {
   return new BrowserWorkspace({
     storage,
     now: () => clock.now,
     newId: ids(),
     ...(prefix === undefined ? {} : { prefix }),
+    ...(offeredEndings === undefined ? {} : { offeredEndings }),
   })
 }
 
@@ -267,7 +273,7 @@ describe('browser-local projects', () => {
   })
 
   test('a project holds description, industry and all six style fields', () => {
-    const workspace = openWorkspace(new MemoryStorage(), { now: firstVisit })
+    const workspace = openWorkspace(new MemoryStorage(), { now: firstVisit }, undefined, ['com', 'studio'])
     const project = workspace.createProject({
       name: 'Acme',
       description: 'We build things.',
@@ -312,7 +318,7 @@ describe('browser-local projects', () => {
   })
 
   test('a style change never rewrites a name or ticks a domain check', () => {
-    const workspace = openWorkspace(new MemoryStorage(), { now: firstVisit })
+    const workspace = openWorkspace(new MemoryStorage(), { now: firstVisit }, undefined, ['com', 'studio'])
     const project = workspace.createProject({ name: 'Acme' })
     workspace.addCandidate(project.id, {
       name: 'Quillstead',

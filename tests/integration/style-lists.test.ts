@@ -25,20 +25,23 @@ describe('GET /api/style-lists', () => {
 
     assert.deepEqual(lists.namingStyles, SHIPPED_STYLE_LISTS.namingStyles)
     assert.deepEqual(lists.tones, SHIPPED_STYLE_LISTS.tones)
-    assert.deepEqual(lists.endings, SHIPPED_STYLE_LISTS.endings)
-    assert.deepEqual(lists.offeredEndings, SHIPPED_STYLE_LISTS.offeredEndings)
+    // A fresh database has only the seeded .com row; the daily refresh adds
+    // every other ending that passes DomainCheck.offeredEndings.
+    assert.deepEqual(lists.endings, ['com'])
+    assert.deepEqual(lists.offeredEndings, ['com'])
   })
 
   test('an operator change is visible to the next read', async () => {
     const store = new StyleListStore(running.db)
     store.addOption('tone', 'plainspoken', 'Plain spoken', 'operator@example.com')
-    assert.equal(store.removeEnding('studio', 'operator@example.com'), true)
+    // A fresh database seeds only the required .com pick.
+    assert.equal(store.removeEnding('com', 'operator@example.com'), true)
 
     const response = await fetch(`${running.baseUrl}/api/style-lists`)
     assert.equal(response.status, 200)
     const lists = (await response.json()) as StyleLists
     assert.ok(lists.tones.some((tone) => tone.id === 'plainspoken' && tone.label === 'Plain spoken'))
-    assert.ok(!lists.endings.includes('studio'))
+    assert.ok(!lists.endings.includes('com'))
     assert.equal(response.headers.get('cache-control'), 'no-store')
     assert.match(response.headers.get('content-type') ?? '', /^application\/json/)
   })

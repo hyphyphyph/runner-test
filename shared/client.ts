@@ -51,6 +51,11 @@ export class ApiClient {
     return this.request('GET /api/style-lists', init)
   }
 
+  /** `GET /api/offered-endings` — every ending and the facts behind its offer. */
+  offeredEndings(init?: RequestInit): Promise<ApiResponse<'GET /api/offered-endings'>> {
+    return this.request('GET /api/offered-endings', init)
+  }
+
   async request<R extends ApiRoute>(route: R, init?: RequestInit): Promise<ApiResponse<R>> {
     const split = route.indexOf(' ')
     const method = route.slice(0, split)
