@@ -52,6 +52,7 @@ server/              the API process
   offered-endings.ts the daily root zone and RDAP refresh behind offered endings
   style-lists.ts     the operator's style, tone and ending pick lists
   allowance.ts       counters, monthly refresh, atomic spend and reservations
+  email.ts           the four transactional email kinds, opt-outs and retries
   version.ts         version read from package.json
 shared/              code shared by the server and the browser
   api.ts             the API contract: request and response types
@@ -229,6 +230,34 @@ registry terms refusal with a reason in `registry_terms`. The list of registry
 terms is not published in a machine-readable form, so an unrecorded registry is
 allowed by default and the operator must settle its terms before launch.
 
+### Transactional email
+
+`server/email.ts` is the only path by which the product may send email. There
+are exactly four kinds: a magic link, which a password reset uses too, an
+invitation, a receipt and an admin notice. A request carries only the fields
+its kind allows; `composeEmail` refuses any other field, including a
+description, a generated name or a domain result. Every message is plain text,
+and its first line names the site and the reason in the form
+`NameTempest: <reason>`. No message stores a project, a candidate or a check
+result.
+
+`EmailProvider` is the provider seam. The provider and the sending address are
+open questions, so no network provider is chosen; `MemoryEmailProvider` is used
+by tests and by a development run that must not send. `TransactionalEmailService`
+tries a failed send three times, waiting one second and then five seconds,
+before it raises `delivery_failed` with a plain message. The retries happen in
+the sending process; this build keeps no outbox across a restart.
+
+`EmailPreferenceStore` keeps one opt-out row per normalized address and kind in
+`email_optouts`. An invitation, an admin notice and a receipt for someone
+else's payment can be turned off. A magic link and a receipt for the recipient's
+own payment are always sent, and the store refuses to turn off a magic link.
+`optOutOfOptionalKinds` turns off the three optional kinds at once.
+
+The service does not issue or validate the single-use magic link; that belongs
+to the sign-in work. It never touches the allowance, so a magic link that never
+arrives is never counted against the free allowance.
+
 ### Privacy rules in the schema
 
 The schema follows the specification's StoredWork anchor:
@@ -240,6 +269,9 @@ The schema follows the specification's StoredWork anchor:
   current month
 - a session token, a magic link and a password reset link are kept only as
   hashes
+- an outgoing email is composed in memory and is not stored, so no message
+  body and no magic-link token is written to the email tables; only opt-out
+  choices are kept
 
 `tests/unit/schema.test.ts` reads every column from the migrated schema and
 fails if a readable password, a network address or a payment field appears.
@@ -339,8 +371,9 @@ stripping.
 
 - Unit tests use an in-memory database or in-memory storage and cover
   migrations, constraints, stored work, the schema privacy rules, the
-  browser-local projects, the allowance spend and reserve rules, and races
-  across separate database connections.
+  browser-local projects, the allowance spend and reserve rules, races
+  across separate database connections, and the four email kinds with their
+  opt-outs and retries.
 - Integration tests start a real server on a random port with a real SQLite
   file, then call it with the shared typed client and with raw `fetch` for the
   error cases.
