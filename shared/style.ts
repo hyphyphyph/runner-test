@@ -66,12 +66,13 @@ export const SHIPPED_TONES: readonly StyleOption[] = Object.freeze([
 ])
 
 /**
- * The shipped ending list. Every ending here is one the first version may
- * suggest and check. The refreshed root zone list, the lookup route and the
- * registry terms decide the real offered set under DomainCheck.offeredEndings;
- * this is the starting set until that refresh is connected.
+ * The starting picks for the operator's preferred-ending list. These are not
+ * the offered set: every pick is filtered against DomainCheck.offeredEndings
+ * before the form shows it, and an ending that fails that rule never appears.
+ * The offered set itself is built from the refreshed root zone list and the
+ * RDAP bootstrap file; see server/offered-endings.ts.
  */
-export const SHIPPED_OFFERED_ENDINGS: readonly string[] = Object.freeze([
+export const SHIPPED_ENDING_PICKS: readonly string[] = Object.freeze([
   'com',
   'io',
   'co',
@@ -84,12 +85,18 @@ export const SHIPPED_OFFERED_ENDINGS: readonly string[] = Object.freeze([
   'app',
 ])
 
-/** The lists a fresh install shows before the operator changes anything. */
+/**
+ * The lists a fresh install shows before the operator changes anything.
+ *
+ * There is no shipped offered-ending list. Until the server answers with its
+ * refreshed set, the browser offers no ending rather than inventing one; the
+ * form shows its empty state and a round still runs on the description alone.
+ */
 export const SHIPPED_STYLE_LISTS: StyleLists = Object.freeze({
   namingStyles: [...SHIPPED_NAMING_STYLES],
   tones: [...SHIPPED_TONES],
-  endings: [...SHIPPED_OFFERED_ENDINGS],
-  offeredEndings: [...SHIPPED_OFFERED_ENDINGS],
+  endings: [...SHIPPED_ENDING_PICKS],
+  offeredEndings: [],
 })
 
 /** A project's style before the person picks anything. */
@@ -184,11 +191,12 @@ export function lengthChoiceLabel(id: string): string {
 /**
  * Read lists from an API or storage value. Returns null when the shape is
  * unusable, so the caller can fall back to the shipped lists. Endings are
- * always filtered to the offered set the response gives.
+ * always filtered to the offered set the response gives. There is no local
+ * offered set to fall back on: an answer without one offers no ending.
  */
 export function coerceStyleLists(
   value: unknown,
-  fallbackEndings: readonly string[] = SHIPPED_OFFERED_ENDINGS,
+  fallbackEndings: readonly string[] = [],
 ): StyleLists | null {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return null
   const record = value as Record<string, unknown>

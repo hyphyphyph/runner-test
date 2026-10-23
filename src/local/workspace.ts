@@ -42,7 +42,6 @@ import type { AllowanceCost, RemainingAllowance } from './allowance.ts'
 import {
   emptyStyleChoices,
   normalizeEnding as normalizeStyleEnding,
-  SHIPPED_OFFERED_ENDINGS,
 } from '../../shared/style.ts'
 
 export { allowancePeriod } from './allowance.ts'
@@ -418,7 +417,7 @@ export class BrowserWorkspace {
     this.#now = options.now ?? Date.now
     this.#newId = options.newId ?? defaultNewId
     this.#prefix = options.prefix ?? ANONYMOUS_STORAGE_PREFIX
-    this.#offeredEndings = normalizeOfferedEndings(options.offeredEndings ?? SHIPPED_OFFERED_ENDINGS)
+    this.#offeredEndings = normalizeOfferedEndings(options.offeredEndings ?? [])
   }
 
   /**

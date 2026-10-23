@@ -3,20 +3,20 @@
 // The store owns three lists: the naming style choices, the tone choices and
 // the ending pick list. The first two are free labels the operator may add,
 // rename or remove. An ending may enter the pick list only when it passes
-// DomainCheck.offeredEndings. The offered set is injected, so the refreshed
-// root zone and registry rules can replace the shipped set without changing
-// this store.
+// DomainCheck.offeredEndings. The offered set is read from OfferedEndingStore,
+// the one query built from the refreshed root zone list and RDAP bootstrap
+// file, so no second list of endings lives here.
 //
 // Removing a choice changes only what is offered from then on. It never
 // touches a project, because a project keeps its own style document.
 
 import type { Db } from './db.ts'
+import { OfferedEndingStore } from './offered-endings.ts'
 import type { StyleLists, StyleOption } from '../shared/style.ts'
 import {
   filterEndingPicks,
   normalizeEnding,
   normalizeOptionId,
-  SHIPPED_OFFERED_ENDINGS,
   SHIPPED_STYLE_LISTS,
 } from '../shared/style.ts'
 
@@ -50,8 +50,9 @@ export interface StyleListStoreOptions {
   /** Fixed clock, so a test can check the recorded time. */
   now?: () => Date
   /**
-   * Endings that pass DomainCheck.offeredEndings. The shipped set is used
-   * until the root zone refresh is connected.
+   * Endings that pass DomainCheck.offeredEndings. When omitted, the store
+   * reads the one offered-ending query built from the refreshed root zone
+   * list and the RDAP bootstrap file.
    */
   offeredEndings?: readonly string[]
 }
@@ -101,7 +102,7 @@ export class StyleListStore {
   constructor(db: Db, options: StyleListStoreOptions = {}) {
     this.#db = db
     this.#now = options.now ?? (() => new Date())
-    const offered = options.offeredEndings ?? SHIPPED_OFFERED_ENDINGS
+    const offered = options.offeredEndings ?? new OfferedEndingStore(db).offered()
     this.#offered = filterEndingPicks(offered, offered)
   }
 

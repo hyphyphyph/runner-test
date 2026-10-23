@@ -4,6 +4,7 @@
 // client in ./client.ts, and by the browser through that client, so both
 // ends of every call are checked against the same shape.
 
+import type { OfferedEnding } from './endings.ts'
 import type { StyleLists } from './style.ts'
 
 /** The answer to a database check inside the health report. */
