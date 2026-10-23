@@ -258,6 +258,12 @@ The service does not issue or validate the single-use magic link; that belongs
 to the sign-in work. It never touches the allowance, so a magic link that never
 arrives is never counted against the free allowance.
 
+Two limits are recorded in the specification's build notes. A repeated
+operator alert from `Failures.OperatorAlerts` has no admin-notice message yet,
+so this service does not compose it. An admin notice turned off is not sent,
+even where the deletion or admin-change text says the person is told by email;
+the opt-out rule wins until the specification adds an exception.
+
 ### Privacy rules in the schema
 
 The schema follows the specification's StoredWork anchor:

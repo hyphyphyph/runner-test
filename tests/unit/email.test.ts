@@ -11,6 +11,7 @@ import {
   MemoryEmailProvider,
   SITE_NAME,
   TransactionalEmailService,
+  assertOutgoingEmail,
   composeEmail,
   isAlwaysSent,
   isEmailKind,
@@ -226,6 +227,70 @@ describe('the first line and the work it must never carry', () => {
       () => composeEmail({ ...adminNotice(), candidateName: 'Quillstead' } as never),
       refuses('invalid_details'),
     )
+    assert.throws(
+      () => composeEmail({ ...invitation(), html: '<p>A promotion</p>' } as never),
+      refuses('invalid_details'),
+    )
+  })
+
+  test('the provider boundary refuses an extra field as well as a work field', () => {
+    const message = composeEmail(invitation())
+
+    assert.throws(() => assertOutgoingEmail({ ...message, html: '<p>Hello</p>' } as never), refuses('invalid_details'))
+    assert.throws(
+      () => assertOutgoingEmail({ ...message, domainResult: 'quillstead.com is free' } as never),
+      refuses('invalid_details'),
+    )
+    assert.throws(
+      () => assertOutgoingEmail({ ...message, text: 'NameTempest: Hello\n\nBody' } as never),
+      refuses('invalid_details'),
+    )
+  })
+
+  test('the provider boundary needs a reason and a one-line subject', () => {
+    const message = composeEmail(invitation())
+
+    assert.throws(
+      () => assertOutgoingEmail({ ...message, firstLine: `${SITE_NAME}:  `, text: `${SITE_NAME}:  ` } as never),
+      refuses('invalid_details'),
+    )
+    assert.throws(
+      () => assertOutgoingEmail({ ...message, subject: `${SITE_NAME}: Hello\nBcc: else@example.com` }),
+      refuses('invalid_details'),
+    )
+    assert.throws(
+      () => assertOutgoingEmail({ ...message, subject: `${SITE_NAME}: Hello\rBcc: else@example.com` }),
+      refuses('invalid_details'),
+    )
+  })
+
+  test('bad details are refused for every kind before a provider sees them', async (t) => {
+    const { provider, service } = withStore(t)
+
+    const bad: Array<[string, TransactionalEmail]> = [
+      ['purpose', magicLink({ purpose: 'welcome' as never })],
+      ['link scheme', magicLink({ link: 'javascript:alert(1)' })],
+      ['expiry', magicLink({ expiresAt: 0 })],
+      ['invitation event', invitation({ event: 'promoted' as never })],
+      ['organization', invitation({ organization: '   ' })],
+      ['invitation link', invitation({ link: 'not a web address' })],
+      ['receipt event', receipt({ event: 'refunded' as never })],
+      ['receipt item', receipt({ item: 'addon' as never })],
+      ['amount', receipt({ amountCents: -1 })],
+      ['fractional amount', receipt({ amountCents: 1.5 })],
+      ['currency', receipt({ currency: 'US' })],
+      ['admin notice event', adminNotice({ event: 'promotion' as never })],
+      ['effective time', adminNotice({ effectiveAt: -2 })],
+    ]
+
+    for (const [label, request] of bad) {
+      assert.throws(() => composeEmail(request), refuses('invalid_details'), label)
+    }
+
+    for (const [, request] of bad) {
+      await assert.rejects(service.send(request), refuses('invalid_details'))
+    }
+    assert.equal(provider.sent.length, 0)
   })
 
   test('an invalid kind is refused by composeEmail too', () => {
@@ -303,6 +368,23 @@ describe('opting out', () => {
     const result = await service.send(receipt({ paidBy: 'payer@example.com' }))
     assert.equal(result.status, 'suppressed')
     assert.equal(provider.sent.length, 0)
+  })
+
+  test('a receipt for someone else\'s payment is sent when it is not turned off', async (t) => {
+    const { provider, service } = withStore(t)
+
+    const result = await service.send(receipt({ paidBy: 'payer@example.com' }))
+
+    assert.equal(result.status, 'sent')
+    assert.equal(provider.sent.length, 1)
+  })
+
+  test('an always-sent check still needs a usable address', () => {
+    assert.throws(() => isAlwaysSent('magic_link', 'not-an-address'), refuses('invalid_recipient'))
+    assert.throws(
+      () => isAlwaysSent('receipt', RECIPIENT, 'not-an-address'),
+      refuses('invalid_recipient'),
+    )
   })
 
   test('turning off every optional kind leaves the magic link alone', async (t) => {
@@ -384,6 +466,58 @@ describe('retrying a failed send', () => {
     await assert.rejects(service.send(adminNotice()), refuses('delivery_failed'))
     assert.equal(provider.calls, 1)
   })
+
+  test('the wait between tries follows the configured delays and reuses the last one', async (t) => {
+    const db = openDatabase(':memory:')
+    t.after(() => db.close())
+    const waits: number[] = []
+    const provider = new FlakyProvider(10)
+    const service = new TransactionalEmailService({
+      provider,
+      preferences: new EmailPreferenceStore(db, { now: () => new Date(NOW) }),
+      retry: { attempts: 4, delaysMs: [10, 20], sleep: async (milliseconds) => void waits.push(milliseconds) },
+    })
+
+    await assert.rejects(service.send(invitation()), refuses('delivery_failed'))
+    assert.equal(provider.calls, 4)
+    assert.deepEqual(waits, [10, 20, 20])
+  })
+
+  test('a bad retry policy is refused when the service is built', () => {
+    const db = openDatabase(':memory:')
+    try {
+      const preferences = new EmailPreferenceStore(db)
+      const provider = new MemoryEmailProvider()
+
+      assert.throws(
+        () => new TransactionalEmailService({ provider, preferences, retry: { attempts: 0 } }),
+        RangeError,
+      )
+      assert.throws(
+        () => new TransactionalEmailService({ provider, preferences, retry: { attempts: 1, delaysMs: [-1] } }),
+        RangeError,
+      )
+      assert.throws(
+        () =>
+          new TransactionalEmailService({
+            provider,
+            preferences: undefined as never,
+          }),
+        refuses('preferences_required'),
+      )
+      assert.throws(
+        () =>
+          new TransactionalEmailService({
+            provider: undefined as never,
+            preferences,
+          }),
+        refuses('provider_required'),
+      )
+      assert.throws(() => new TransactionalEmailService(null as never), refuses('provider_required'))
+    } finally {
+      db.close()
+    }
+  })
 })
 
 describe('opt-out storage', () => {
@@ -420,6 +554,29 @@ describe('opt-out storage', () => {
       .prepare('select count(*) as count from email_optouts where email_normalized = ? and kind = ?')
       .get(RECIPIENT, 'invitation') as { count: number }
     assert.equal(row.count, 1)
+  })
+
+  test('a kind outside the four and a bad address are refused', (t) => {
+    const db = openDatabase(':memory:')
+    t.after(() => db.close())
+    const preferences = new EmailPreferenceStore(db)
+
+    assert.throws(() => preferences.optOut(RECIPIENT, 'newsletter' as never), refuses('unsupported_kind'))
+    assert.throws(() => preferences.optIn(RECIPIENT, 'newsletter' as never), refuses('unsupported_kind'))
+    assert.throws(() => preferences.isOptedOut(RECIPIENT, 'newsletter' as never), refuses('unsupported_kind'))
+    assert.throws(() => preferences.optOut('not-an-address', 'invitation'), refuses('invalid_recipient'))
+    assert.throws(() => preferences.isOptedOut('not-an-address', 'magic_link'), refuses('invalid_recipient'))
+
+    assert.deepEqual(preferences.optedOutKinds(RECIPIENT), [])
+  })
+
+  test('turning on a kind that was never off reports that nothing changed', (t) => {
+    const db = openDatabase(':memory:')
+    t.after(() => db.close())
+    const preferences = new EmailPreferenceStore(db)
+
+    assert.equal(preferences.optIn(RECIPIENT, 'admin_notice'), false)
+    assert.deepEqual(preferences.optedOutKinds(RECIPIENT), [])
   })
 })
 

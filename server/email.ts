@@ -142,6 +142,7 @@ export type EmailErrorCode =
   | 'invalid_details'
   | 'always_sent'
   | 'provider_required'
+  | 'preferences_required'
   | 'delivery_failed'
 
 /** A refused or failed email operation, with a message that is safe to show. */
@@ -249,13 +250,18 @@ export function assertOutgoingEmail(message: OutgoingEmail): void {
     }
   }
 
-  if (typeof raw.subject !== 'string' || raw.subject.trim().length === 0) {
-    throw new EmailError('invalid_details', 'An email needs a subject.', kind)
+  if (
+    typeof raw.subject !== 'string' ||
+    raw.subject.trim().length === 0 ||
+    raw.subject.includes('\n') ||
+    raw.subject.includes('\r')
+  ) {
+    throw new EmailError('invalid_details', 'An email needs a one-line subject.', kind)
   }
   if (
     typeof raw.firstLine !== 'string' ||
     !raw.firstLine.startsWith(FIRST_LINE_SITE) ||
-    raw.firstLine.length <= FIRST_LINE_SITE.length
+    raw.firstLine.slice(FIRST_LINE_SITE.length).trim().length === 0
   ) {
     throw new EmailError('invalid_details', 'An email must name the site and the reason in its first line.', kind)
   }
@@ -302,9 +308,10 @@ export function receiptPayer(request: TransactionalEmail): string | null {
  * always sent, and a receipt for a payment the recipient made is always sent.
  */
 export function isAlwaysSent(kind: EmailKind, recipient: string, payer: string | null = null): boolean {
+  const cleanRecipient = normalizeEmail(recipient, kind)
   if (kind === 'magic_link') return true
   if (kind !== 'receipt' || payer === null) return false
-  return normalizeEmail(recipient, kind) === normalizeEmail(payer, kind)
+  return cleanRecipient === normalizeEmail(payer, kind)
 }
 
 /** A whole email send, after any retries. */
@@ -355,8 +362,21 @@ export class TransactionalEmailService {
   readonly #sleep: (milliseconds: number) => Promise<void>
 
   constructor(options: TransactionalEmailServiceOptions) {
+    if (typeof options !== 'object' || options === null) {
+      throw new EmailError('provider_required', 'A transactional email provider is needed before mail can be sent.')
+    }
     if (typeof options.provider !== 'object' || options.provider === null || typeof options.provider.send !== 'function') {
       throw new EmailError('provider_required', 'A transactional email provider is needed before mail can be sent.')
+    }
+    if (
+      typeof options.preferences !== 'object' ||
+      options.preferences === null ||
+      typeof options.preferences.isOptedOut !== 'function'
+    ) {
+      throw new EmailError(
+        'preferences_required',
+        'An email preference store is needed before mail can be sent.',
+      )
     }
 
     const attempts = options.retry?.attempts ?? DEFAULT_ATTEMPTS
@@ -411,6 +431,9 @@ export class TransactionalEmailService {
   }
 
   async #deliver(message: OutgoingEmail): Promise<{ attempts: number; providerMessageId: string | null }> {
+    // Check at the service boundary too, so a provider passed as a plain
+    // object cannot receive a message this module did not compose.
+    assertOutgoingEmail(message)
     let lastError: unknown = null
 
     for (let attempt = 1; attempt <= this.#attempts; attempt++) {
@@ -494,8 +517,8 @@ export class EmailPreferenceStore {
   /** True when this address has turned this kind off. Magic links are never off. */
   isOptedOut(to: string, kind: EmailKind): boolean {
     const checked = assertEmailKind(kind)
-    if (checked === 'magic_link') return false
     const email = normalizeEmail(to, checked)
+    if (checked === 'magic_link') return false
     return (
       this.#db
         .prepare('select 1 as found from email_optouts where email_normalized = ? and kind = ?')
